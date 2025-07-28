@@ -2,3 +2,4 @@ streamlit
 moviepy
 gdown
 openai
+imageio-ffmpeg
