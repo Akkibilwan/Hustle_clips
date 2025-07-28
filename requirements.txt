@@ -1,9 +1,7 @@
-streamlit==1.33.0
+streamlit
+openai
+google-generativeai
+python-docx
+gdown
 moviepy==1.0.3
-gdown==4.7.1
-openai==1.14.3
-imageio==2.25.1
-imageio-ffmpeg==0.4.8
-decorator==5.1.1
-numpy==1.23.5
-tqdm==4.64.1
+imageio-ffmpeg==0.4.9
