@@ -404,7 +404,8 @@ def main():
                 st.markdown(f"**Strategy:** {clip['rationale']}")
         
         if st.button("✅ Proceed with Franken-Clip Generation", type="secondary"):
-        st.session_state.results = {"type": "generator", "data": []}
+            # --- EXACT COPY OF WORKING CODE LOGIC ---
+            st.session_state.results = {"type": "generator", "data": []}
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
                 with st.spinner("⬇️ Downloading video from Google Drive..."):
