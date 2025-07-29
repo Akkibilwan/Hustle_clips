@@ -57,14 +57,18 @@ You should prioritize clips that explore:
 
 **Short Title:** [Catchy title with emoji]
 **Estimated Total Duration:** [e.g., 42 seconds]
-**Type:** Franken-Clip  
-**Number of Segments:** [e.g., 4 segments]
+**Type:** Franken-Clip
+**Number of Segments:** [e.g., 5 segments]
 
-**Timestamp Segments:**  
-SEGMENT 1: [start --> end]  
-SEGMENT 2: [start --> end]  
-SEGMENT 3: [start --> end]  
-SEGMENT 4: [start --> end]  
+**Timestamp Segments:**
+SEGMENT 1: 00:01:23,450 --> 00:01:27,200
+SEGMENT 2: 00:05:15,300 --> 00:05:19,800
+SEGMENT 3: 00:12:03,100 --> 00:12:08,900
+SEGMENT 4: 00:18:45,200 --> 00:18:50,500
+SEGMENT 5: 00:25:12,800 --> 00:25:18,300
+
+**Script:**
+[Exact dialogue from each segment in order - no modifications]
 
 **Script:**  
 [Exact dialogue from each segment in order. Dialogue must flow like natural speech. Do not rewrite or combine non-matching tones.]
