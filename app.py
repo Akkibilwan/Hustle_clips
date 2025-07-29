@@ -32,23 +32,36 @@ You should prioritize clips that explore:
 
 ---
 
-🎯 FRANKEN-CLIP STRATEGY (for SRT with precise 2-word per line timestamps):
-- **HOOK FIRST**: Find a compelling question, statement, or cliffhanger from early in the transcript
-- **SKIP THE FILLER**: Jump over "um", "you know", transitional phrases, and weak responses
-- **LAND THE PAYOFF**: Jump to a completely different timestamp where the real insight, story, or revelation happens
-- **MAXIMIZE RETENTION**: Each jump should feel seamless and create curiosity
-- **PRECISE TIMING**: Use the exact SRT timestamps - you have word-level precision, use it!
-- **SEGMENT LENGTH**: Each segment should be 2-8 seconds (since transcript is detailed)
-- **TOTAL DURATION**: 25-50 seconds combined
+🎯 FRANKEN-CLIP STRATEGY (for WORD-LEVEL SRT with precise timestamps):
+
+**CRITICAL: COMBINE MULTIPLE SRT LINES FOR LONGER SEGMENTS**
+- Since each SRT line is 1-2 words, you MUST combine 10-30 consecutive lines to create meaningful 8-15 second segments
+- Each segment should contain COMPLETE THOUGHTS or SENTENCES
+- Don't break in the middle of sentences or ideas
+
+**SEGMENT LENGTH REQUIREMENTS:**
+- **HOOK SEGMENT**: 8-15 seconds (combine 20-40 SRT lines for a complete hook)
+- **CONTEXT SEGMENT**: 6-12 seconds (combine 15-30 SRT lines for background)
+- **BUILD SEGMENT**: 8-15 seconds (combine 20-40 SRT lines for tension/stakes)
+- **PAYOFF SEGMENT**: 10-18 seconds (combine 25-45 SRT lines for the revelation/wisdom)
+- **TOTAL DURATION**: 35-55 seconds combined
+
+**NARRATIVE STRUCTURE (MANDATORY):**
+1. **HOOK** (8-15s): Compelling question, surprising statement, or cliffhanger from early in transcript
+2. **CONTEXT** (6-12s): Brief background or setup from a different timestamp  
+3. **BUILD** (8-15s): Tension, stakes, or emotional escalation from another timestamp
+4. **PAYOFF** (10-18s): The big reveal, wisdom, or emotional resolution from much later
 
 ---
 
 🛑 STRICT REQUIREMENTS:
 - ONLY create Franken-Clips (NO direct continuous clips)
 - Use EXACT transcript dialogue - no modifications whatsoever
-- Provide EXACT timestamps in HH:MM:SS,mmm format matching the SRT
-- Each clip must use 4-8 different timestamp segments (more segments = better retention)
-- Each segment must be from DIFFERENT parts of the video (at least 30 seconds apart)
+- **COMBINE 10-30 consecutive SRT lines** to create each segment
+- Each segment must be **8-18 seconds long** (not 2-4 seconds!)
+- Each segment must contain **COMPLETE THOUGHTS**
+- Segments must be from DIFFERENT parts of the video (at least 2-3 minutes apart)
+- **READ THE COMBINED TEXT** - ensure it makes sense as a coherent segment
 - Focus on the PRIORITIZED THEMES above
 
 ---
@@ -56,45 +69,46 @@ You should prioritize clips that explore:
 📦 OUTPUT FORMAT (repeat for each Franken-Clip):
 
 **Short Title:** [Viral title with emoji focusing on prioritized themes]
-**Theme Category:** [Which prioritized theme this targets: Money/Vulnerability/Transformation/Industry/Advice/Stereotype-Busting]
-**Estimated Total Duration:** [e.g., 38 seconds]
+**Theme Category:** [Which prioritized theme: Money/Vulnerability/Transformation/Industry/Advice/Stereotype-Busting]
+**Estimated Total Duration:** [e.g., 42 seconds]
 **Type:** Franken-Clip
-**Number of Segments:** [e.g., 6 segments]
+**Number of Segments:** [Always 4 segments: HOOK + CONTEXT + BUILD + PAYOFF]
 
 **Timestamp Segments:**
-SEGMENT 1: 00:01:23,450 --> 00:01:26,200 [HOOK - setup/question]
-SEGMENT 2: 00:05:15,300 --> 00:05:18,800 [CONTEXT - brief context]
-SEGMENT 3: 00:12:03,100 --> 00:12:06,900 [BUILD - tension/stakes]
-SEGMENT 4: 00:18:45,200 --> 00:18:48,500 [REVEAL - key insight]
-SEGMENT 5: 00:25:12,800 --> 00:25:16,300 [IMPACT - consequence/result]
-SEGMENT 6: 00:32:05,100 --> 00:32:09,400 [PAYOFF - final wisdom/takeaway]
+SEGMENT 1: 00:01:23,450 --> 00:01:37,200 [HOOK - compelling question/statement]
+SEGMENT 2: 00:05:15,300 --> 00:05:26,800 [CONTEXT - background/setup]  
+SEGMENT 3: 00:12:03,100 --> 00:12:18,900 [BUILD - tension/stakes/emotion]
+SEGMENT 4: 00:18:45,200 --> 00:19:02,500 [PAYOFF - revelation/wisdom/resolution]
 
-**Script:**
-[Exact dialogue from each segment in order - no modifications, include every word exactly as transcribed]
+**Script Preview:**
+[Show the COMBINED text from each segment to verify it makes sense - include 3-4 lines from each segment to demonstrate coherence]
+
+**Coherence Check:**
+[Verify that each segment contains complete thoughts and the narrative flow makes sense. State "APPROVED" only if all segments are coherent and create a compelling story arc]
 
 **Viral Strategy:**
-[Explain why this specific combination of moments creates maximum retention and targets the chosen theme. Describe the narrative arc and emotional journey.]
+[Explain why this specific combination creates maximum retention and targets the chosen theme]
 
 ---
 
-🎯 ADVANCED FRANKEN-CLIP TECHNIQUES:
-1. **Question-Answer Separation**: Take a question from one timestamp, jump to the answer 20+ minutes later
-2. **Before-After Jumps**: Show the problem early, jump to the solution much later
-3. **Contradiction Reveals**: Find seemingly contradictory statements that actually reveal deeper truth
-4. **Emotion Escalation**: Start calm, jump to emotional peaks, land on wisdom
-5. **Secret-Reveal Pattern**: Tease something big, skip buildup, jump straight to the reveal
+🎯 EXAMPLES OF PROPER SEGMENT COMBINATION:
+
+**WRONG** (Too short, incomplete thought):
+SEGMENT 1: 00:01:23,450 --> 00:01:25,200 [Text: "The biggest"]
+
+**RIGHT** (Complete thought, proper length):  
+SEGMENT 1: 00:01:23,450 --> 00:01:37,200 [Text: "The biggest mistake I made in my career was thinking that being nice would get me promoted. I spent three years being the person who said yes to everything, who stayed late, who never pushed back. And you know what happened? I got passed over for promotion twice."]
 
 ---
 
 🛑 CRITICAL REQUIREMENTS:
-- MINIMUM 10 segments per Franken-Clip
-- MAXIMUM 40 segments per Franken-Clip  
-- Each segment must be 2-8 seconds (leverage the detailed SRT timing)
-- Focus on PRIORITIZED THEMES for maximum viral potential
-- Segments must create a compelling narrative arc across time jumps
-- Total duration: 25-50 seconds
+- Each Franken-Clip must have EXACTLY 4 segments following HOOK → CONTEXT → BUILD → PAYOFF structure
+- Each segment must be 8-18 seconds long (combine multiple SRT lines!)
+- **COHERENCE CHECK MANDATORY** - only approve clips where all segments make complete sense
+- Segments must jump across significant time gaps (2+ minutes apart)
+- Focus on viral themes for maximum engagement
 
-Generate ONLY Franken-Clips that target the prioritized themes and use precise timestamp segments.
+Generate ONLY Franken-Clips that pass the coherence check and follow the proper structure.
 """
 
 # ---
@@ -158,46 +172,67 @@ def parse_ai_output(text: str) -> list:
             theme_match = re.search(r'\*\*Theme Category:\*\*\s*(.*?)(?:\n|\*\*)', section)
             theme_category = theme_match.group(1).strip() if theme_match else "General"
             
-            # Extract number of segments
+            # Extract number of segments (should always be 4 now)
             segments_match = re.search(r'\*\*Number of Segments:\*\*\s*(.*?)(?:\n|\*\*)', section)
-            num_segments = segments_match.group(1).strip() if segments_match else "Unknown"
+            num_segments = segments_match.group(1).strip() if segments_match else "4"
 
-            # Extract viral strategy instead of rationale
+            # Extract coherence check
+            coherence_match = re.search(r'\*\*Coherence Check:\*\*(.*?)(?:\n\*\*)', section, re.DOTALL)
+            coherence_check = coherence_match.group(1).strip() if coherence_match else ""
+
+            # Extract viral strategy
             strategy_match = re.search(r'\*\*Viral Strategy:\*\*(.*?)(?:\n\*\*|$)', section, re.DOTALL)
             viral_strategy = strategy_match.group(1).strip() if strategy_match else "No strategy provided."
 
-            script_match = re.search(r'\*\*Script:\*\*(.*?)(?=\*\*Viral Strategy:\*\*)', section, re.DOTALL)
+            # Extract script preview
+            script_match = re.search(r'\*\*Script Preview:\*\*(.*?)(?=\*\*Coherence Check:\*\*)', section, re.DOTALL)
             script = script_match.group(1).strip() if script_match else "Script not found."
 
-            # Extract ALL individual timestamp segments with labels
-            timestamp_text_match = re.search(r'\*\*Timestamp Segments:\*\*(.*?)(?=\*\*Script:\*\*)', section, re.DOTALL)
+            # Extract ALL individual timestamp segments with enhanced labels
+            timestamp_text_match = re.search(r'\*\*Timestamp Segments:\*\*(.*?)(?=\*\*Script Preview:\*\*)', section, re.DOTALL)
             timestamps = []
             if timestamp_text_match:
                 timestamp_text = timestamp_text_match.group(1)
-                # Find all SEGMENT patterns with optional labels
-                segment_matches = re.findall(r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})(?:\s*\[(.*?)\])?', timestamp_text)
+                # Find all SEGMENT patterns with structure labels
+                segment_matches = re.findall(r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*\[(.*?)\]', timestamp_text)
                 for segment_num, start_str, end_str, label in segment_matches:
                     start_sec = parse_srt_timestamp(start_str)
                     end_sec = parse_srt_timestamp(end_str)
+                    duration = end_sec - start_sec
+                    
+                    # Validate segment length (8-18 seconds as per new requirements)
+                    if duration < 6:
+                        st.warning(f"⚠️ Segment {segment_num} is only {duration:.1f}s - may be too short for coherent content")
+                    elif duration > 20:
+                        st.warning(f"⚠️ Segment {segment_num} is {duration:.1f}s - may be too long for retention")
+                    
                     timestamps.append({
                         "segment_num": int(segment_num),
                         "start_str": start_str, 
                         "end_str": end_str, 
                         "start_sec": start_sec, 
                         "end_sec": end_sec,
+                        "duration": duration,
                         "label": label.strip() if label else f"Segment {segment_num}"
                     })
 
-            if timestamps and len(timestamps) >= 4:  # Must have at least 4 segments for enhanced Franken-Clips
+            # Only accept clips that pass coherence check and have proper structure
+            if timestamps and len(timestamps) == 4 and "APPROVED" in coherence_check.upper():
                 clips.append({
                     "title": title, 
                     "type": "Franken-Clip", 
                     "theme_category": theme_category,
                     "num_segments": len(timestamps),
+                    "coherence_check": coherence_check,
                     "viral_strategy": viral_strategy,
                     "script": script, 
                     "timestamps": timestamps
                 })
+            elif "APPROVED" not in coherence_check.upper():
+                st.warning(f"⚠️ Skipping Franken-Clip '{title}' - failed coherence check")
+            elif len(timestamps) != 4:
+                st.warning(f"⚠️ Skipping Franken-Clip '{title}' - needs exactly 4 segments (HOOK→CONTEXT→BUILD→PAYOFF)")
+                
         except Exception as e:
             st.warning(f"Could not parse Franken-Clip section {i}: {e}")
     return clips
@@ -264,7 +299,8 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 continue
             
             if len(subclips) < 4:
-                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Enhanced Franken-Clips work best with 4+ segments.")
+                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Enhanced Franken-Clips require exactly 4 segments (HOOK→CONTEXT→BUILD→PAYOFF).")
+                continue
 
             # Calculate total duration
             total_duration = sum(seg["duration"] for seg in valid_segments)
@@ -294,6 +330,7 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 "theme_category": clip_data.get('theme_category', 'General'),
                 "num_segments": len(valid_segments),
                 "total_duration": total_duration,
+                "coherence_check": clip_data.get('coherence_check', 'Not checked'),
                 "viral_strategy": clip_data.get('viral_strategy', 'No strategy provided'),
                 "script": clip_data['script'],
                 "timestamps": clip_data['timestamps'],  # Original timestamps
