@@ -87,8 +87,8 @@ SEGMENT 6: 00:32:05,100 --> 00:32:09,400 [PAYOFF - final wisdom/takeaway]
 ---
 
 🛑 CRITICAL REQUIREMENTS:
-- MINIMUM 4 segments per Franken-Clip
-- MAXIMUM 8 segments per Franken-Clip  
+- MINIMUM 10 segments per Franken-Clip
+- MAXIMUM 40 segments per Franken-Clip  
 - Each segment must be 2-8 seconds (leverage the detailed SRT timing)
 - Focus on PRIORITIZED THEMES for maximum viral potential
 - Segments must create a compelling narrative arc across time jumps
