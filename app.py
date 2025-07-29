@@ -11,7 +11,7 @@ import gdown
 from openai import OpenAI
 
 # ---
-# 1. SYSTEM PROMPT - NEW "PRECISION EDITOR" LOGIC
+# 1. SYSTEM PROMPT - "PRECISION EDITOR" LOGIC
 # ---
 SYSTEM_PROMPT = """
 You are an expert viral video editor specializing in "Franken-Clips". Your task is to create a compelling 25-60 second story by stitching together non-contiguous clips.
@@ -80,8 +80,33 @@ def get_openai_api_key() -> str:
     """Gets the OpenAI API key from Streamlit secrets."""
     return st.secrets.get("openai", {}).get("api_key", "")
 
+# NEW: Function to fetch available models from OpenAI
+def fetch_openai_models(api_key: str) -> list[str]:
+    """Fetches available chat models from the OpenAI API."""
+    default_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
+    if not api_key:
+        st.warning("OpenAI API key not found. Using default model list.")
+        return default_models
+    try:
+        client = OpenAI(api_key=api_key)
+        models = client.models.list()
+        # Filter for chat models and prioritize the most common/powerful ones
+        chat_models = sorted([
+            model.id for model in models 
+            if "gpt" in model.id and "instruct" not in model.id and "/" not in model.id
+        ], reverse=True)
+        
+        # Ensure priority models are at the top if they exist
+        priority_list = [m for m in default_models if m in chat_models]
+        other_models = [m for m in chat_models if m not in default_models]
+        
+        return priority_list + other_models
+    except Exception as e:
+        st.warning(f"Could not fetch OpenAI models due to an API error: {e}. Using default list.")
+        return default_models
+
 def parse_srt_timestamp(timestamp_str: str) -> float:
-    """Convert SRT timestamp format (HH:MM:SS,ms) to total seconds."""
+    """Convert SRT timestamp format to total seconds."""
     timestamp_str = timestamp_str.strip().replace(',', '.')
     try:
         parts = timestamp_str.split(':')
@@ -96,11 +121,8 @@ def parse_srt_timestamp(timestamp_str: str) -> float:
         st.warning(f"Could not parse timestamp: {timestamp_str}")
         return 0.0
 
-# REMOVED: The `merge_consecutive_srt_lines` function is no longer needed.
-# The AI will now perform this logic virtually.
-
 def read_transcript_file(uploaded_file) -> str:
-    """Reads the raw transcript file content without any pre-merging."""
+    """Reads the raw transcript file content."""
     try:
         content = uploaded_file.read().decode("utf-8")
         st.info("✅ Granular transcript loaded. The AI will now group the best phrases.")
@@ -109,7 +131,9 @@ def read_transcript_file(uploaded_file) -> str:
         st.error(f"Error reading transcript file: {e}")
         return ""
 
-def analyze_transcript_with_llm(transcript: str, count: int):
+# MODIFIED: Accepts a 'model' parameter
+def analyze_transcript_with_llm(transcript: str, count: int, model: str):
+    """Analyzes the transcript with the specified AI model."""
     user_content = f"Here is the granular, word-level transcript:\n\n{transcript}\n\nPlease generate {count} unique Franken-Clips by grouping these lines and following all instructions."
     
     api_key = get_openai_api_key()
@@ -119,30 +143,26 @@ def analyze_transcript_with_llm(transcript: str, count: int):
     try:
         client = OpenAI(api_key=api_key)
         resp = client.chat.completions.create(
-            # Using a powerful model is ESSENTIAL for this complex reasoning task
-            model="gpt-4o", 
+            model=model, # Use the selected model
             messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_content}],
             temperature=0.7,
             max_tokens=4000
         )
         return resp.choices[0].message.content
     except Exception as e:
-        st.error(f"OpenAI API error: {e}")
+        st.error(f"OpenAI API error with model '{model}': {e}")
         st.code(traceback.format_exc())
         return None
 
 def parse_ai_output(text: str) -> list:
     clips = []
-    # Split the entire response by the main title header
     sections = re.split(r'\*\*Short Title:\*\*', text.strip())
     
     for i, section in enumerate(sections):
         if not section.strip():
             continue
-        
         try:
             full_section_text = "**Short Title:**" + section
-            
             title_match = re.search(r'\*\*Short Title:\*\*\s*(.*?)\n', full_section_text)
             title = title_match.group(1).strip() if title_match else f"Untitled Franken-Clip {i+1}"
             
@@ -168,34 +188,25 @@ def parse_ai_output(text: str) -> list:
                 for seg_num, (start_str, end_str, text_content, purpose) in enumerate(found_segments, 1):
                     start_sec = parse_srt_timestamp(start_str)
                     end_sec = parse_srt_timestamp(end_str)
-                    if end_sec > start_sec: # Basic validation
+                    if end_sec > start_sec:
                         timestamps.append({
-                            "segment_num": seg_num,
-                            "start_str": start_str.strip(),
-                            "end_str": end_str.strip(),
-                            "start_sec": start_sec,
-                            "end_sec": end_sec,
-                            "duration": end_sec - start_sec,
-                            "text": text_content.strip(),
-                            "label": purpose.strip().upper(),
+                            "segment_num": seg_num, "start_str": start_str.strip(), "end_str": end_str.strip(),
+                            "start_sec": start_sec, "end_sec": end_sec, "duration": end_sec - start_sec,
+                            "text": text_content.strip(), "label": purpose.strip().upper(),
                         })
             
             if timestamps and len(timestamps) >= 2:
                 clips.append({
-                    "title": title,
-                    "theme_category": theme_category,
-                    "num_segments": len(timestamps),
-                    "viral_strategy": viral_strategy,
-                    "script": ' ... '.join([t['text'] for t in timestamps]),
+                    "title": title, "theme_category": theme_category, "num_segments": len(timestamps),
+                    "viral_strategy": viral_strategy, "script": ' ... '.join([t['text'] for t in timestamps]),
                     "timestamps": timestamps
                 })
                 st.success(f"✅ AI proposed a clip: '{title}' with {len(timestamps)} precision segments.")
             else:
-                st.warning(f"⚠️ Could not parse valid segments for '{title}'. The AI might not have followed the format.")
+                st.warning(f"⚠️ Could not parse valid segments for '{title}'.")
                 
         except Exception as e:
             st.warning(f"Could not parse a Franken-Clip section. Error: {e}")
-            st.code(f"Problematic section:\n{section}")
             
     return clips
 
@@ -216,9 +227,7 @@ def download_drive_file(drive_url: str, download_path: str) -> str:
         raise Exception(f"Google Drive download failed: {e}.")
 
 def generate_clips_progressively(video_path: str, clips_data: list, output_dir: str):
-    """
-    Generator function that creates FRANKEN-CLIPS by stitching the AI's proposed "Logical Segments".
-    """
+    """Generator function that creates FRANKEN-CLIPS."""
     try:
         source_video = VideoFileClip(video_path)
         video_duration = source_video.duration
@@ -227,15 +236,12 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
         return
 
     for i, clip_data in enumerate(clips_data):
-        st.info(f"Processing Franken-Clip {i+1}/{len(clips_data)}: '{clip_data['title']}'")
-        
+        st.info(f"Processing Clip {i+1}/{len(clips_data)}: '{clip_data['title']}'")
         subclips = []
         valid_segments = []
-        
         try:
             for ts in clip_data["timestamps"]:
                 start_time, end_time = ts['start_sec'], ts['end_sec']
-                
                 if start_time < video_duration and end_time <= video_duration and start_time < end_time:
                     subclips.append(source_video.subclip(start_time, end_time))
                     valid_segments.append({
@@ -245,17 +251,16 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 else:
                     st.warning(f"  ⚠️ Skipping segment {ts['label']} as it's out of video bounds.")
             
-            if len(subclips) < 2:
-                st.error(f"❌ Not enough valid segments for '{clip_data['title']}'. Skipping.")
+            if not subclips:
+                st.error(f"❌ No valid segments found for '{clip_data['title']}'. Skipping.")
                 continue
 
             final_clip = concatenate_videoclips(subclips)
             total_duration = final_clip.duration
-            
             safe_title = re.sub(r'[^\w\s-]', '', clip_data['title']).strip().replace(' ', '_')
-            output_filepath = os.path.join(output_dir, f"franken_clip_{i+1}_{safe_title[:30]}.mp4")
+            output_filepath = os.path.join(output_dir, f"clip_{i+1}_{safe_title[:30]}.mp4")
             
-            st.info(f"🎥 Rendering Franken-Clip: '{clip_data['title']}' ({total_duration:.1f}s)...")
+            st.info(f"🎥 Rendering: '{clip_data['title']}' ({total_duration:.1f}s)...")
             final_clip.write_videofile(output_filepath, codec="libx264", audio_codec="aac", temp_audiofile=f'temp-audio-franken_{i}.m4a', remove_temp=True, logger='bar')
             
             yield {
@@ -265,51 +270,68 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 "valid_segments": valid_segments
             }
             st.success(f"✅ Generated: {os.path.basename(output_filepath)}")
-
         except Exception as e:
             st.error(f"❌ Failed to generate clip '{clip_data['title']}': {e}")
-            st.code(traceback.format_exc())
         finally:
             if 'final_clip' in locals(): final_clip.close()
             for sc in subclips: sc.close()
     
     source_video.close()
 
-
 # ---
-# 3. STREAMLIT APP (UI is largely the same, but text is updated for clarity)
+# 3. STREAMLIT APP
 # ---
 
 def main():
     st.set_page_config(page_title="Precision Franken-Clip Generator", layout="wide", page_icon="✂️")
     
     st.title("✂️ Precision Franken-Clip Generator")
-    st.markdown("""
-    **This tool acts like a master editor.** It reads your detailed, word-by-word transcript and finds the perfect phrases—even if they're minutes apart—to stitch together a viral story.
-    """)
+    st.markdown("This tool reads your detailed transcript and finds the perfect phrases to stitch together a viral story.")
 
     if 'results' not in st.session_state:
         st.session_state.results = []
 
+    # MODIFIED: Sidebar now includes AI provider and model selection
     with st.sidebar:
         st.header("⚙️ Configuration")
-        st.info("For best results, use a **granular (word-level)** SRT file.")
+        
+        st.subheader("1. Inputs")
         video_url = st.text_input("Public Google Drive URL", placeholder="https://drive.google.com/...")
         uploaded_transcript = st.file_uploader("Upload Granular SRT Transcript", type=["srt", "txt"])
-        clips_count = st.slider("Number of Franken-Clips to Generate:", 1, 5, 2)
+        st.info("For best results, use a **granular (word-level)** SRT file.")
+
+        st.subheader("2. Generation Settings")
+        clips_count = st.slider("Number of Clips to Generate:", 1, 5, 2)
+
+        st.subheader("3. AI Settings")
+        # For now, we only implement OpenAI, but this structure allows for future expansion
+        ai_provider = st.selectbox("AI Provider:", ["OpenAI"]) #, "Google"
+        
+        selected_model = ""
+        if ai_provider == "OpenAI":
+            openai_api_key = get_openai_api_key()
+            available_models = fetch_openai_models(openai_api_key)
+            selected_model = st.selectbox(
+                "Select OpenAI Model:",
+                available_models,
+                help="`gpt-4o` is powerful but slower. `gpt-4o-mini` is faster and cheaper."
+            )
         
         st.markdown("---")
         with st.expander("ℹ️ How Precision Editing Works"):
             st.markdown("""
-            - **1. Granular Input:** You provide a detailed transcript where every word or short phrase has its own timestamp.
-            - **2. AI Grouping:** The AI reads all the small lines and intelligently groups them into complete thoughts (e.g., it combines lines 52-58 to create a perfect hook).
-            - **3. Precision Cut:** It calculates the exact start and end time of that group and cuts only that specific segment from your video.
-            - **4. Narrative Stitch:** It repeats this to find a build and payoff, then stitches them into a seamless, high-impact short.
+            - **1. Granular Input:** You provide a detailed transcript.
+            - **2. AI Grouping:** The AI reads all the small lines and intelligently groups them into complete thoughts.
+            - **3. Precision Cut:** It calculates the exact start/end time of that group and cuts only that segment.
+            - **4. Narrative Stitch:** It repeats this to build a seamless, high-impact short.
             """)
 
     if st.button("🚀 Generate Precision Clips", type="primary", use_container_width=True):
         if not video_url or not uploaded_transcript:
-            st.error("❌ Please provide both a video URL and a granular transcript file.")
+            st.error("❌ Please provide both a video URL and a transcript file.")
+            return
+        if not selected_model:
+            st.error("❌ Please select an AI model in the sidebar.")
             return
 
         st.session_state.results = []
@@ -320,14 +342,15 @@ def main():
                 transcript_content = read_transcript_file(uploaded_transcript)
                 if not transcript_content: raise ValueError("Transcript is empty or invalid.")
                 
-                status.update(label="Step 2/5: AI is 'watching' the transcript to find stories...")
-                ai_response = analyze_transcript_with_llm(transcript_content, clips_count)
+                status.update(label=f"Step 2/5: AI is analyzing transcript using {selected_model}...")
+                # MODIFIED: Pass the selected model to the function
+                ai_response = analyze_transcript_with_llm(transcript_content, clips_count, selected_model)
                 if not ai_response: raise ValueError("AI analysis failed.")
                 
                 status.update(label="Step 3/5: Parsing AI's edit decisions...")
                 clips_data = parse_ai_output(ai_response)
                 if not clips_data:
-                    st.error("❌ AI failed to propose any valid clips. It may have struggled with the transcript or failed to follow the output format.")
+                    st.error("❌ AI failed to propose valid clips.")
                     with st.expander("🔍 Show Raw AI Response for Debugging"):
                         st.text_area("AI Response", ai_response, height=300)
                     raise ValueError("Parsing failed.")
@@ -345,7 +368,7 @@ def main():
                     st.session_state.results = final_clips
                 
                 if not st.session_state.results:
-                     status.update(label="Process finished, but no clips were generated successfully.", state="error")
+                     status.update(label="Process finished, but no clips were generated.", state="error")
                 else:
                     status.update(label=f"🎉 All {len(st.session_state.results)} clips are ready!", state="complete")
 
