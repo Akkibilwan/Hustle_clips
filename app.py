@@ -389,6 +389,11 @@ def parse_ai_output(text: str) -> list:
                 st.success(f"✅ Parsed '{title}' with {len(timestamps)} segments")
             else:
                 st.warning(f"⚠️ No valid segments found for '{title}'")
+                    
+        except Exception as e:
+            st.warning(f"Could not parse Franken-Clip section {i}: {e}")
+    
+    return clips
 
 def parse_ai_output_relaxed(text: str) -> list:
     """
