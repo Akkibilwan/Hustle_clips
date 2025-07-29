@@ -1,524 +1,352 @@
-# Optimized Local Video Processor - Using Best Practices from Working Code
+# Exact Copy of Working Code Structure - SRT ClipStitcher
 import os
-import json
 import re
 import tempfile
-import shutil
 import streamlit as st
 import traceback
+import shutil
 import gc
+
+# All necessary libraries exactly like working code
 from moviepy.editor import VideoFileClip, concatenate_videoclips
-from moviepy.video.fx.all import crop, resize
 import gdown
 from openai import OpenAI
 
-# ----------
-# Configuration
-# ----------
+# ---
+# 1. SYSTEM PROMPT (Using working code approach)
+# ---
+SYSTEM_PROMPT = """
+You are an expert YouTube Shorts strategist and video editor.
 
-st.set_page_config(
-    page_title="Optimized SRT ClipStitcher", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+Your job is to analyze the full transcript of a long-form interview or podcast and extract powerful 30–60 second Shorts using two formats:
+1. Direct Clips — continuous timestamp segments that tell a complete story.
+2. Franken-Clips — stitched from non-contiguous timestamps, using a hook from one part and payoff from another.
 
-def get_api_key() -> str:
-    """Get OpenAI API key from secrets."""
-    if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
-        return st.secrets["openai"]["api_key"]
-    return os.getenv("OPENAI_API_KEY", "")
+---
 
-def cleanup_memory():
-    """Force garbage collection to free memory."""
-    gc.collect()
+🛑 STRICT RULE: DO NOT REWRITE OR SUMMARIZE ANY DIALOGUE.
 
-# ----------
-# Smart Download with Verification (From Working Code)
-# ----------
+You must:
+- Use the transcript lines exactly as they appear in the provided SRT/transcript.
+- Do not shorten, reword, paraphrase, or compress the speaker's sentences.
+- Keep all original punctuation, phrasing, and spelling.
+- Only include full dialogue blocks — no cherry-picking fragments from within a block.
+- ALWAYS provide EXACT timestamps in HH:MM:SS,mmm format (e.g., 00:01:23,450)
 
-def extract_drive_file_id(drive_url: str) -> str:
-    """Extract file ID from Google Drive URL patterns."""
-    patterns = [
-        r'/file/d/([a-zA-Z0-9_-]+)',
-        r'id=([a-zA-Z0-9_-]+)',
-        r'open\?id=([a-zA-Z0-9_-]+)'
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, drive_url)
-        if match:
-            return match.group(1)
-    
-    raise ValueError("Could not extract file ID from Google Drive URL")
+The output should allow a video editor to directly cut the clip using the given timestamps and script.
 
-def download_and_verify_video(drive_url: str, download_path: str) -> tuple:
-    """
-    Exact same download logic as the working code.
-    Returns (success: bool, video_path: str, error_message: str)
-    """
+---
+
+📦 OUTPUT FORMAT (repeat for each Short):
+
+**Short Title:** [Catchy title with emoji]
+**Estimated Duration:** [e.g., 42 seconds]
+**Type:** [Direct Clip / Franken-Clip]
+
+**Timestamps:**
+START: 00:01:23,450 --> END: 00:01:35,200
+[For Franken-clips, list multiple timestamp ranges]
+
+**Script:**
+[Exact dialogue from transcript - no modifications]
+
+**Rationale:**
+[Brief explanation why this will go viral]
+
+---
+
+🛑 CRITICAL REMINDERS:
+- Provide EXACT timestamps that match the SRT format
+- Do not modify any dialogue
+- Ensure timestamps are accurate and complete
+- Each clip should be 30-60 seconds total
+
+Generate the requested number of shorts following this exact format.
+"""
+
+# ---
+# 2. HELPER FUNCTIONS (Exact copy from working code)
+# ---
+
+def get_openai_api_key() -> str:
+    return st.secrets.get("openai", {}).get("api_key", "")
+
+def read_transcript_file(uploaded_file) -> str:
     try:
-        output_path = os.path.join(download_path, 'downloaded_video.mp4')  # Same filename as working code
-        
-        # Exact same download call as working code
+        return uploaded_file.read().decode("utf-8")
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        return ""
+
+def parse_srt_timestamp(timestamp_str: str) -> float:
+    """Convert SRT timestamp format to total seconds."""
+    timestamp_str = timestamp_str.strip().replace(',', '.')
+    try:
+        time_parts = timestamp_str.split(':')
+        if len(time_parts) == 3:
+            h, m, s_ms = time_parts
+            return int(h) * 3600 + int(m) * 60 + float(s_ms)
+        elif len(time_parts) == 2:
+            m, s_ms = time_parts
+            return int(m) * 60 + float(s_ms)
+        return float(time_parts[0])
+    except Exception:
+        return 0.0
+
+def analyze_transcript_with_llm(transcript: str, count: int):
+    user_content = f"{transcript}\n\nPlease generate {count} unique potential shorts following the exact format specified."
+    
+    api_key = get_openai_api_key()
+    if not api_key:
+        st.error("OpenAI API key not set.")
+        return None
+    try:
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_content}],
+            temperature=0.7, max_tokens=4000
+        )
+        return resp.choices[0].message.content
+    except Exception as e:
+        st.error(f"OpenAI API error: {e}")
+        return None
+
+def parse_ai_output(text: str) -> list:
+    clips = []
+    sections = re.split(r'\*\*Short Title:\*\*', text)
+    
+    for i, section in enumerate(sections[1:], 1):
+        try:
+            title_match = re.search(r'^(.*?)(?:\n|\*\*)', section, re.MULTILINE)
+            title = title_match.group(1).strip() if title_match else f"Untitled Clip {i}"
+            
+            type_match = re.search(r'\*\*Type:\*\*\s*(.*?)(?:\n|\*\*)', section)
+            clip_type = type_match.group(1).strip() if type_match else "Unknown"
+
+            rationale_match = re.search(r'\*\*Rationale:\*\*(.*?)(?:\n\*\*|$)', section, re.DOTALL)
+            rationale = rationale_match.group(1).strip() if rationale_match else "No rationale provided."
+
+            script_match = re.search(r'\*\*Script:\*\*(.*?)(?=\*\*Rationale:\*\*)', section, re.DOTALL)
+            script = script_match.group(1).strip() if script_match else "Script not found."
+
+            timestamp_text_match = re.search(r'\*\*Timestamps:\*\*(.*?)(?=\*\*Script:\*\*)', section, re.DOTALL)
+            timestamps = []
+            if timestamp_text_match:
+                timestamp_text = timestamp_text_match.group(1)
+                timestamp_matches = re.findall(r'START:\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*END:\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})', timestamp_text)
+                for start_str, end_str in timestamp_matches:
+                    start_sec = parse_srt_timestamp(start_str)
+                    end_sec = parse_srt_timestamp(end_str)
+                    timestamps.append({"start_str": start_str, "end_str": end_str, "start_sec": start_sec, "end_sec": end_sec})
+
+            if timestamps:
+                clips.append({
+                    "title": title, "type": clip_type, "rationale": rationale,
+                    "script": script, "timestamps": timestamps
+                })
+        except Exception as e:
+            st.warning(f"Could not parse clip section {i}: {e}")
+    return clips
+
+def download_drive_file(drive_url: str, download_path: str) -> str:
+    """Downloads a Google Drive file and verifies its integrity - EXACT COPY."""
+    try:
+        output_path = os.path.join(download_path, 'downloaded_video.mp4')
         gdown.download(drive_url, output_path, quiet=False, fuzzy=True)
-        
-        # Exact same verification as working code
+
         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-            return False, None, "Downloaded file is missing or empty."
-        
-        # Exact same MoviePy verification as working code
+            raise Exception("Downloaded file is missing or empty.")
+
         try:
             with VideoFileClip(output_path) as clip:
                 duration = clip.duration
             if duration is None or duration <= 0:
-                return False, None, "Video file is corrupted (duration is zero or None)."
+                raise Exception("Video file is corrupted (duration is zero or None).")
             st.info(f"Verified downloaded file. Duration: {duration:.2f} seconds.")
-            return True, output_path, ""
+            return output_path
         except Exception as e:
-            return False, None, f"Downloaded file appears to be corrupted and cannot be read by MoviePy. Error: {e}. This often happens with incomplete downloads. Please check the Google Drive sharing settings and try again."
-            
+            raise Exception(f"Downloaded file appears to be corrupted and cannot be read by MoviePy. Error: {e}. This often happens with incomplete downloads. Please check the Google Drive sharing settings and try again.")
+
     except Exception as e:
-        return False, None, f"Google Drive download failed: {e}. Ensure the link is public and correct."
+        raise Exception(f"Google Drive download failed: {e}. Ensure the link is public and correct.")
 
-# ----------
-# AI Analysis Functions
-# ----------
-
-def get_system_prompt() -> str:
-    """System prompt for AI analysis."""
-    return """
-You are an expert viral video editor. Analyze the provided SRT transcript and select compelling segments for a viral short video.
-
-REQUIREMENTS:
-1. Select 2-5 separate segments that tell a cohesive story
-2. Total duration: 15-45 seconds (optimized for memory)
-3. Clear narrative arc: Hook -> Development -> Payoff
-4. Each segment should be 3-15 seconds long
-
-OUTPUT FORMAT (JSON only):
-{
-  "segments": [
-    {
-      "start": "00:00:04,439",
-      "end": "00:00:06,169", 
-      "text": "The biggest mistake..."
-    }
-  ],
-  "reason": "Why this combination works",
-  "title": "Catchy title"
-}
-
-CRITICAL: Use exact SRT timestamp format and keep total duration under 45 seconds.
-"""
-
-def srt_time_to_seconds(time_str: str) -> float:
-    """Convert SRT time format to seconds."""
-    try:
-        time_parts = time_str.split(',')
-        h, m, s = time_parts[0].split(':')
-        ms = time_parts[1] if len(time_parts) > 1 else '0'
-        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
-    except Exception:
-        return 0
-
-def parse_srt(srt_content: str) -> tuple:
-    """Parse SRT file content."""
-    pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\n*$)', re.DOTALL)
-    matches = pattern.findall(srt_content)
-    
-    segments = []
-    transcript = []
-    
-    for match in matches:
-        index, start, end, text = match
-        text = text.strip().replace('\n', ' ')
-        segments.append({"index": int(index), "start": start, "end": end, "text": text})
-        transcript.append(f"[{index}] {start} --> {end} | {text}")
-    
-    return segments, "\n".join(transcript)
-
-def analyze_transcript(transcript: str, client: OpenAI) -> dict:
-    """Get AI analysis of transcript."""
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": get_system_prompt()},
-                {"role": "user", "content": f"Analyze this transcript:\n\n{transcript}"}
-            ],
-            temperature=0.5,
-            max_tokens=1500,  # Reduced for efficiency
-            response_format={"type": "json_object"}
-        )
-        return json.loads(response.choices[0].message.content)
-    except Exception as e:
-        st.error(f"AI analysis error: {e}")
-        return {}
-
-# ----------
-# Progressive Video Processing (From Working Code)
-# ----------
-
-def generate_clips_progressively(video_path: str, segments: list, make_vertical: bool, output_dir: str):
+def generate_clips_progressively(video_path: str, clips_data: list, output_dir: str):
     """
-    Exact same progressive processing logic as the working code.
-    Yields completed clips as they're processed.
+    Generator function that cuts, stitches, and YIELDS video clips one by one - EXACT COPY.
     """
     source_video = VideoFileClip(video_path)
     video_duration = source_video.duration
     
-    for i, segment in enumerate(segments):
-        st.info(f"Processing Clip {i+1}/{len(segments)}: '{segment.get('text', 'Clip')[:30]}...'")
+    for i, clip_data in enumerate(clips_data):
+        st.info(f"Processing Clip {i+1}/{len(clips_data)}: '{clip_data['title']}'")
         try:
             subclips = []
-            start_time = srt_time_to_seconds(segment["start"])
-            end_time = srt_time_to_seconds(segment["end"])
-            
-            # Validate timestamps (same as working code)
-            if start_time < video_duration and end_time <= video_duration:
-                subclips.append(source_video.subclip(start_time, end_time))
-            else:
-                st.warning(f"Segment {segment['start']} -> {segment['end']} is out of video bounds. Skipping.")
-                continue
+            for ts in clip_data["timestamps"]:
+                start_time, end_time = ts['start_sec'], ts['end_sec']
+                if start_time < video_duration and end_time <= video_duration:
+                    subclips.append(source_video.subclip(start_time, end_time))
+                else:
+                    st.warning(f"Segment {ts['start_str']} -> {ts['end_str']} is out of video bounds. Skipping.")
             
             if not subclips:
-                st.error(f"No valid segments for clip. Skipping.")
+                st.error(f"No valid segments for clip '{clip_data['title']}'. Skipping.")
                 continue
 
             final_clip = concatenate_videoclips(subclips) if len(subclips) > 1 else subclips[0]
             
-            # Apply vertical transformation if requested
-            if make_vertical:
-                clip_w, clip_h = final_clip.size
-                target_aspect = 9.0 / 16.0
-                current_aspect = float(clip_w) / clip_h
-                
-                if current_aspect > target_aspect:  # Too wide
-                    new_width = int(clip_h * target_aspect)
-                    final_clip = crop(final_clip, width=new_width, x_center=clip_w/2)
-                else:  # Too tall
-                    new_height = int(clip_w / target_aspect)
-                    final_clip = crop(final_clip, height=new_height, y_center=clip_h/2)
-                
-                # Resize to standard vertical resolution
-                final_clip = resize(final_clip, height=min(1080, final_clip.h))
-            
-            # Generate filename (same pattern as working code)
-            safe_title = re.sub(r'[^\w\s-]', '', segment.get("text", f"clip_{i+1}")).strip().replace(' ', '_')
+            safe_title = re.sub(r'[^\w\s-]', '', clip_data['title']).strip().replace(' ', '_')
             output_filepath = os.path.join(output_dir, f"clip_{i+1}_{safe_title[:20]}.mp4")
             
-            # Render with same settings as working code
-            final_clip.write_videofile(
-                output_filepath, 
-                codec="libx264", 
-                audio_codec="aac", 
-                temp_audiofile=f'temp-audio_{i}.m4a', 
-                remove_temp=True, 
-                logger=None
-            )
+            final_clip.write_videofile(output_filepath, codec="libx264", audio_codec="aac", temp_audiofile=f'temp-audio_{i}.m4a', remove_temp=True, logger=None)
             
-            # Calculate file info
-            if os.path.exists(output_filepath):
-                duration = end_time - start_time
-                size_mb = os.path.getsize(output_filepath) / (1024 * 1024)
-                
-                yield {
-                    "path": output_filepath,
-                    "title": segment.get("text", f"Clip {i+1}")[:50] + "...",
-                    "duration": duration,
-                    "size_mb": size_mb,
-                    "success": True
-                }
-                
-                st.success(f"✅ Generated clip: Clip {i+1}")
-            
-        except Exception as e:
-            st.error(f"Failed to generate clip {i+1}: {e}")
+            # YIELD the completed clip's data - EXACT COPY
             yield {
-                "path": None,
-                "title": f"Clip {i+1}",
-                "error": str(e),
-                "success": False
+                "path": output_filepath,
+                "title": clip_data['title'],
+                "type": clip_data['type'],
+                "rationale": clip_data['rationale'],
+                "script": clip_data['script'],
+                "timestamps": clip_data['timestamps']
             }
+            st.success(f"✅ Generated clip: {clip_data['title']}")
+
+        except Exception as e:
+            st.error(f"Failed to generate clip '{clip_data['title']}': {e}")
         finally:
-            # Exact same cleanup as working code
-            if 'final_clip' in locals(): 
-                final_clip.close()
+            if 'final_clip' in locals(): final_clip.close()
             if 'subclips' in locals():
-                for sc in subclips: 
-                    sc.close()
-            cleanup_memory()
+                for sc in subclips: sc.close()
 
     source_video.close()
 
-# ----------
-# Main Streamlit App
-# ----------
+# ---
+# 3. STREAMLIT APP - EXACT STRUCTURE FROM WORKING CODE
+# ---
 
 def main():
-    st.title("🎬 Optimized SRT ClipStitcher")
-    st.markdown("**Smart video processing with progressive loading and memory optimization**")
+    st.set_page_config(page_title="SRT ClipStitcher", layout="wide", page_icon="🎬")
     
-    # Memory usage info
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Memory Usage", "Optimized")
-    with col2:
-        st.metric("Processing", "Progressive")
-    with col3:
-        st.metric("Max File Size", "1GB+")
+    st.title("🎬 SRT ClipStitcher")
+    st.markdown("**Generate video clips from Google Drive videos using SRT analysis.**")
+
+    # Initialize session state - EXACT COPY
+    if 'results' not in st.session_state:
+        st.session_state.results = None
+
+    # Sidebar Configuration - SIMPLIFIED LIKE WORKING CODE
+    with st.sidebar:
+        st.header("⚙️ Configuration")
+        
+        video_url = st.text_input("Google Drive URL", placeholder="Paste your Google Drive URL here...")
+        uploaded_transcript = st.file_uploader("Upload SRT/Transcript File", type=["srt", "txt"])
+        clips_count = st.slider("Number of Clips to Generate:", 1, 10, 3)
     
-    # Initialize session state
-    if 'app_state' not in st.session_state:
-        st.session_state.app_state = {
-            "video_path": None,
-            "srt_content": None,
-            "analysis_result": None,
-            "generated_clips": [],
-            "processing_complete": False
-        }
-    
-    state = st.session_state.app_state
-    
-    # API key check
-    api_key = get_api_key()
-    if not api_key:
-        st.error("❌ OpenAI API key required. Add to Streamlit secrets.")
-        st.stop()
-    
-    client = OpenAI(api_key=api_key)
-    
-    # Sidebar inputs
-    st.sidebar.header("📥 Configuration")
-    
-    drive_url = st.sidebar.text_input(
-        "🔗 Google Drive Video URL",
-        placeholder="https://drive.google.com/file/d/...",
-        help="Make sure the video is shared publicly"
-    )
-    
-    srt_file = st.sidebar.file_uploader("📄 SRT Transcript", type=["srt"])
-    
-    make_vertical = st.sidebar.checkbox("📱 Create Vertical Clips (9:16)", value=True)
-    
-    # Memory management
-    st.sidebar.markdown("---")
-    st.sidebar.header("🧠 Memory Management")
-    if st.sidebar.button("🗑️ Force Cleanup"):
-        cleanup_memory()
-        st.sidebar.success("Memory cleaned!")
-    
-    # Process inputs
-    if drive_url and not state["video_path"]:
-        # Use temporary directory exactly like working code
+    # Main action button - EXACT COPY LOGIC
+    if st.button("🚀 Generate Video Clips", type="primary", use_container_width=True):
+        st.session_state.results = None # Clear previous results
+        if not video_url or not uploaded_transcript:
+            st.error("❌ Please provide both a video URL and a transcript file.")
+            return
+
+        with st.spinner("📖 Reading transcript..."):
+            transcript_content = read_transcript_file(uploaded_transcript)
+            if not transcript_content: return
+        st.success("✅ Transcript loaded.")
+
+        with st.spinner("🧠 Analyzing transcript with AI..."):
+            ai_response = analyze_transcript_with_llm(transcript_content, clips_count)
+            if not ai_response: return
+        st.success("✅ AI analysis complete.")
+
+        with st.spinner("📝 Parsing AI recommendations..."):
+            clips_data = parse_ai_output(ai_response)
+            if not clips_data:
+                st.error("❌ Could not parse any valid clips from the AI response.")
+                return
+        st.success(f"✅ Parsed {len(clips_data)} recommendations.")
+        
+        # --- EXACT COPY OF WORKING CODE LOGIC ---
+        st.session_state.results = {"type": "generator", "data": []}
         with tempfile.TemporaryDirectory() as temp_dir:
-            with st.spinner("⬇️ Downloading video from Google Drive..."):
-                success, video_path, error = download_and_verify_video(drive_url, temp_dir)
-                
-                if success:
-                    # Move to persistent location (same pattern as working code)
-                    persistent_dir = "temp_videos"
-                    os.makedirs(persistent_dir, exist_ok=True)
-                    
-                    # Clean up old files
-                    for f in os.listdir(persistent_dir):
-                        try:
-                            os.remove(os.path.join(persistent_dir, f))
-                        except:
-                            pass
-                    
-                    persistent_path = os.path.join(persistent_dir, "downloaded_video.mp4")  # Same name as working code
-                    shutil.move(video_path, persistent_path)
-                    state["video_path"] = persistent_path
-                    st.success("✅ Video downloaded and verified.")
-                    
-                else:
-                    st.error(f"❌ {error}")
-                    st.stop()
-    
-    if srt_file and not state["srt_content"]:
-        try:
-            state["srt_content"] = srt_file.getvalue().decode("utf-8")
-            st.success("✅ SRT transcript loaded")
-        except Exception as e:
-            st.error(f"❌ Error reading SRT: {e}")
-    
-    # Main interface
-    if not (state["video_path"] and state["srt_content"]):
-        st.info("👆 Please provide both Google Drive URL and SRT file to continue")
-        st.stop()
-    
-    # Show video
-    if state["video_path"] and os.path.exists(state["video_path"]):
-        file_size = os.path.getsize(state["video_path"]) / (1024 * 1024)
-        st.caption(f"Source video: {file_size:.1f}MB")
-        st.video(state["video_path"])
-    
-    # Show transcript
-    with st.expander("📄 View Transcript"):
-        st.text_area("SRT Content", state["srt_content"], height=200)
-    
-    # AI Analysis
-    if not state["analysis_result"]:
-        if st.button("🤖 Analyze Transcript", type="primary"):
-            with st.spinner("🧠 AI analyzing transcript..."):
-                try:
-                    _, transcript_text = parse_srt(state["srt_content"])
-                    analysis = analyze_transcript(transcript_text, client)
-                    
-                    if analysis and "segments" in analysis:
-                        state["analysis_result"] = analysis
-                        st.rerun()
-                    else:
-                        st.error("❌ Analysis failed. Please try again.")
-                        
-                except Exception as e:
-                    st.error(f"❌ Analysis error: {e}")
-    else:
-        # Show analysis results
-        analysis = state["analysis_result"]
-        
-        st.subheader("🎯 AI Analysis Results")
-        st.success(f"**Title:** {analysis.get('title', 'Untitled')}")
-        st.info(f"**Strategy:** {analysis.get('reason', 'No reason provided')}")
-        
-        segments = analysis.get("segments", [])
-        total_duration = sum(
-            srt_time_to_seconds(s["end"]) - srt_time_to_seconds(s["start"]) 
-            for s in segments
-        )
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Selected Segments", f"{len(segments)} clips")
-        with col2:
-            st.metric("Total Duration", f"{total_duration:.1f}s")
-        
-        # Show segments
-        with st.expander("📝 Selected Segments"):
-            for i, seg in enumerate(segments, 1):
-                duration = srt_time_to_seconds(seg["end"]) - srt_time_to_seconds(seg["start"])
-                st.markdown(f"**{i}.** `{seg['start']} → {seg['end']}` ({duration:.1f}s)")
-                st.write(f"*\"{seg['text']}\"*")
-        
-        # Process clips
-        if not state["processing_complete"]:
-            if st.button("🚀 Generate Clips", type="primary"):
+            try:
+                with st.spinner("⬇️ Downloading video from Google Drive..."):
+                    video_path = download_drive_file(video_url, temp_dir)
+                st.success("✅ Video downloaded and verified.")
+
                 st.markdown("---")
-                st.header("🎬 Generating Clips...")
+                st.header("🎬 Your Generated Clips (Loading...)")
                 
-                # Use temporary directory for processing (like working code)
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    try:
-                        # Create persistent output directory
-                        persistent_dir = "generated_clips"
-                        os.makedirs(persistent_dir, exist_ok=True)
-                        
-                        # Clean old clips
-                        for f in os.listdir(persistent_dir):
-                            try:
-                                os.remove(os.path.join(persistent_dir, f))
-                            except:
-                                pass
-                        
-                        # Progressive processing exactly like working code
-                        generated_clips = []
-                        clip_generator = generate_clips_progressively(
-                            state["video_path"], 
-                            segments, 
-                            make_vertical, 
-                            temp_dir  # Process in temp directory
-                        )
-                        
-                        # Process and display clips as they complete
-                        for clip_result in clip_generator:
-                            if clip_result["success"]:
-                                # Move file to persistent storage immediately (like working code)
-                                new_path = os.path.join(persistent_dir, os.path.basename(clip_result['path']))
-                                shutil.move(clip_result['path'], new_path)
-                                clip_result['path'] = new_path
-                                
-                                generated_clips.append(clip_result)
-                                
-                                # Display the just-completed clip
-                                st.subheader(f"✅ {clip_result['title']}")
-                                col_video, col_info = st.columns([2, 1])
-                                
-                                with col_video:
-                                    st.video(clip_result['path'])
-                                    
-                                    with open(clip_result['path'], "rb") as file:
-                                        st.download_button(
-                                            "⬇️ Download",
-                                            file,
-                                            file_name=os.path.basename(clip_result['path']),
-                                            key=f"download_{len(generated_clips)}"
-                                        )
-                                
-                                with col_info:
-                                    st.metric("Duration", f"{clip_result['duration']:.1f}s")
-                                    st.metric("Size", f"{clip_result['size_mb']:.1f}MB")
-                                
-                                st.markdown("---")
-                        
-                        state["generated_clips"] = generated_clips
-                        state["processing_complete"] = True
-                        st.success(f"🎉 Generated {len(generated_clips)} clips successfully!")
-                        
-                    except Exception as e:
-                        st.error(f"An error occurred during clip generation: {e}")
-                        st.code(traceback.format_exc())
-        
-        else:
-            # Show existing clips
-            st.header("✅ Your Generated Clips")
-            for i, clip in enumerate(state["generated_clips"]):
-                if os.path.exists(clip['path']):
-                    st.subheader(f"🎬 {clip['title']}")
-                    col_video, col_info = st.columns([2, 1])
+                persistent_dir = "generated_clips"
+                if not os.path.exists(persistent_dir):
+                    os.makedirs(persistent_dir)
+                for f in os.listdir(persistent_dir):
+                    os.remove(os.path.join(persistent_dir, f))
+                
+                # --- EXACT COPY: Progressive Loading Loop ---
+                final_clips = []
+                clip_generator = generate_clips_progressively(video_path, clips_data, temp_dir)
+                for clip in clip_generator:
+                    # Move file and display immediately - EXACT COPY
+                    new_path = os.path.join(persistent_dir, os.path.basename(clip['path']))
+                    shutil.move(clip['path'], new_path)
+                    clip['path'] = new_path
+                    final_clips.append(clip)
                     
+                    # Display the clip that was just generated - EXACT COPY
+                    st.subheader(f"🎬 {clip['title']}")
+                    col_video, col_info = st.columns(2)
                     with col_video:
                         st.video(clip['path'])
                         with open(clip['path'], "rb") as file:
-                            st.download_button(
-                                "⬇️ Download",
-                                file,
-                                file_name=os.path.basename(clip['path']),
-                                key=f"existing_download_{i}"
-                            )
-                    
+                            st.download_button("⬇️ Download Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{new_path}")
                     with col_info:
-                        st.metric("Duration", f"{clip['duration']:.1f}s")
-                        st.metric("Size", f"{clip['size_mb']:.1f}MB")
-                    
+                        st.markdown(f"**Type:** `{clip['type']}`")
+                        with st.expander("💡 Rationale"):
+                            st.info(clip['rationale'])
+                        with st.expander("📜 Script"):
+                            st.text_area("", clip['script'], height=100, key=f"script_{new_path}")
+                        with st.expander("⏰ Timestamps Used"):
+                            for ts in clip['timestamps']:
+                                st.code(f"{ts['start_str']} --> {ts['end_str']}")
                     st.markdown("---")
-    
-    # Reset button
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🔄 Start Over"):
-        # Clean up files
-        for key, value in state.items():
-            if '_path' in key and value and isinstance(value, str) and os.path.exists(value):
-                try:
-                    os.remove(value)
-                except:
-                    pass
+
+                st.session_state.results["data"] = final_clips # Save final list
+                st.success("🎉 All clips generated!")
+
+            except Exception as e:
+                st.error(f"An error occurred during the clip generation process: {e}")
+                st.code(traceback.format_exc())
+
+    # Display results from session state if they exist (for reruns) - EXACT COPY
+    elif st.session_state.results:
+        results = st.session_state.results
+        st.markdown("---")
         
-        # Clean up directories
-        for dir_name in ["temp_videos", "generated_clips"]:
-            if os.path.exists(dir_name):
-                shutil.rmtree(dir_name, ignore_errors=True)
-        
-        # Reset state
-        st.session_state.app_state = {
-            "video_path": None,
-            "srt_content": None,
-            "analysis_result": None,
-            "generated_clips": [],
-            "processing_complete": False
-        }
-        cleanup_memory()
-        st.rerun()
+        if results["type"] == "generator":
+            st.header("✅ Your Generated Clips")
+            if not results["data"]:
+                st.warning("No clips were successfully generated.")
+            for clip in results["data"]:
+                st.subheader(f"🎬 {clip['title']}")
+                col_video, col_info = st.columns(2)
+                with col_video:
+                    if os.path.exists(clip['path']):
+                        st.video(clip['path'])
+                        with open(clip['path'], "rb") as file:
+                            st.download_button("⬇️ Download Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{clip['path']}")
+                    else:
+                        st.error("Clip file not found.")
+                with col_info:
+                     st.markdown(f"**Type:** `{clip['type']}`")
+                     with st.expander("💡 Rationale"):
+                         st.info(clip['rationale'])
+                     with st.expander("📜 Script"):
+                         st.text_area("", clip['script'], height=100, key=f"script_{clip['path']}")
+                     with st.expander("⏰ Timestamps Used"):
+                         for ts in clip['timestamps']:
+                             st.code(f"{ts['start_str']} --> {ts['end_str']}")
+                st.markdown("---")
 
 if __name__ == "__main__":
     main()
