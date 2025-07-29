@@ -1,24 +1,47 @@
-# Cloud-based Video Processing - No Local Downloads Required
+# Optimized Local Video Processor - Using Best Practices from Working Code
 import os
 import json
 import re
+import tempfile
+import shutil
 import streamlit as st
-import requests
+import traceback
+import gc
+from moviepy.editor import VideoFileClip, concatenate_videoclips
+from moviepy.video.fx.all import crop, resize
+import gdown
 from openai import OpenAI
-import time
-from urllib.parse import parse_qs, urlparse
 
 # ----------
-# Cloud Video Processing Functions
+# Configuration
+# ----------
+
+st.set_page_config(
+    page_title="Optimized SRT ClipStitcher", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+def get_api_key() -> str:
+    """Get OpenAI API key from secrets."""
+    if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
+        return st.secrets["openai"]["api_key"]
+    return os.getenv("OPENAI_API_KEY", "")
+
+def cleanup_memory():
+    """Force garbage collection to free memory."""
+    gc.collect()
+
+# ----------
+# Smart Download with Verification (From Working Code)
 # ----------
 
 def extract_drive_file_id(drive_url: str) -> str:
-    """Extract file ID from various Google Drive URL formats."""
+    """Extract file ID from Google Drive URL patterns."""
     patterns = [
         r'/file/d/([a-zA-Z0-9_-]+)',
         r'id=([a-zA-Z0-9_-]+)',
-        r'open\?id=([a-zA-Z0-9_-]+)',
-        r'/d/([a-zA-Z0-9_-]+)'
+        r'open\?id=([a-zA-Z0-9_-]+)'
     ]
     
     for pattern in patterns:
@@ -28,214 +51,62 @@ def extract_drive_file_id(drive_url: str) -> str:
     
     raise ValueError("Could not extract file ID from Google Drive URL")
 
-def get_direct_video_url(file_id: str) -> str:
-    """Get direct streaming URL for Google Drive video."""
-    return f"https://drive.google.com/uc?export=download&id={file_id}"
-
-def get_video_metadata_from_url(video_url: str) -> dict:
-    """Get video metadata without downloading the file."""
-    try:
-        response = requests.head(video_url, allow_redirects=True)
-        content_length = response.headers.get('content-length')
-        content_type = response.headers.get('content-type', '')
-        
-        return {
-            "url": video_url,
-            "size_mb": int(content_length) / (1024 * 1024) if content_length else 0,
-            "content_type": content_type,
-            "streamable": "video" in content_type.lower()
-        }
-    except Exception as e:
-        st.error(f"Error getting video metadata: {e}")
-        return None
-
-def create_video_processing_job(video_url: str, segments: list, make_vertical: bool = True) -> dict:
-    """Create a video processing job using external API."""
-    
-    # This would integrate with services like:
-    # - FFmpeg.wasm for browser-based processing
-    # - Cloudinary Video API
-    # - AWS Elemental MediaConvert
-    # - Google Cloud Video Intelligence API
-    
-    job_data = {
-        "source_url": video_url,
-        "segments": segments,
-        "output_format": "vertical" if make_vertical else "original",
-        "quality": "1080p",
-        "codec": "h264"
-    }
-    
-    return job_data
-
-# ----------
-# Browser-based FFmpeg Processing
-# ----------
-
-def generate_ffmpeg_wasm_script(video_url: str, segments: list, make_vertical: bool) -> str:
-    """Generate JavaScript code for browser-based video processing using FFmpeg.wasm."""
-    
-    segments_js = json.dumps([{
-        "start": srt_time_to_seconds(seg["start"]),
-        "end": srt_time_to_seconds(seg["end"]),
-        "text": seg["text"]
-    } for seg in segments])
-    
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Video Processing</title>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/index.js"></script>
-</head>
-<body>
-    <div id="status">Initializing FFmpeg...</div>
-    <video id="output" controls style="display:none; max-width:100%;"></video>
-    <a id="download" style="display:none;">Download Video</a>
-    
-    <script>
-        const {{ FFmpeg }} = FFmpegWASM;
-        const {{ fetchFile, toBlobURL }} = FFmpegUtil;
-        
-        const segments = {segments_js};
-        const videoUrl = "{video_url}";
-        const makeVertical = {str(make_vertical).lower()};
-        
-        async function processVideo() {{
-            const ffmpeg = new FFmpeg();
-            const statusDiv = document.getElementById('status');
-            
-            ffmpeg.on('log', ({{ message }}) => {{
-                console.log(message);
-                statusDiv.textContent = message;
-            }});
-            
-            ffmpeg.on('progress', ({{ progress, time }}) => {{
-                statusDiv.textContent = `Processing: ${{Math.round(progress * 100)}}%`;
-            }});
-            
-            try {{
-                statusDiv.textContent = 'Loading FFmpeg...';
-                
-                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-                const coreURL = await toBlobURL(`${{baseURL}}/ffmpeg-core.js`, 'text/javascript');
-                const wasmURL = await toBlobURL(`${{baseURL}}/ffmpeg-core.wasm`, 'application/wasm');
-                
-                await ffmpeg.load({{
-                    coreURL,
-                    wasmURL,
-                }});
-                
-                statusDiv.textContent = 'Downloading video...';
-                
-                // Fetch the source video
-                const videoData = await fetchFile(videoUrl);
-                await ffmpeg.writeFile('input.mp4', videoData);
-                
-                statusDiv.textContent = 'Creating clips...';
-                
-                // Create individual clips
-                const clipFiles = [];
-                for (let i = 0; i < segments.length; i++) {{
-                    const segment = segments[i];
-                    const clipName = `clip_${{i}}.mp4`;
-                    
-                    await ffmpeg.exec([
-                        '-i', 'input.mp4',
-                        '-ss', segment.start.toString(),
-                        '-t', (segment.end - segment.start).toString(),
-                        '-c:v', 'libx264',
-                        '-c:a', 'aac',
-                        '-preset', 'ultrafast',
-                        clipName
-                    ]);
-                    
-                    clipFiles.push(clipName);
-                }}
-                
-                statusDiv.textContent = 'Concatenating clips...';
-                
-                // Create concat file
-                const concatContent = clipFiles.map(file => `file '${{file}}'`).join('\\n');
-                await ffmpeg.writeFile('concat.txt', concatContent);
-                
-                // Concatenate clips
-                await ffmpeg.exec([
-                    '-f', 'concat',
-                    '-safe', '0',
-                    '-i', 'concat.txt',
-                    '-c', 'copy',
-                    'concatenated.mp4'
-                ]);
-                
-                let finalOutput = 'concatenated.mp4';
-                
-                if (makeVertical) {{
-                    statusDiv.textContent = 'Converting to vertical format...';
-                    
-                    await ffmpeg.exec([
-                        '-i', 'concatenated.mp4',
-                        '-vf', 'crop=ih*9/16:ih,scale=1080:1920',
-                        '-c:a', 'copy',
-                        'vertical.mp4'
-                    ]);
-                    
-                    finalOutput = 'vertical.mp4';
-                }}
-                
-                statusDiv.textContent = 'Finalizing...';
-                
-                // Read the final output
-                const data = await ffmpeg.readFile(finalOutput);
-                const blob = new Blob([data.buffer], {{ type: 'video/mp4' }});
-                const url = URL.createObjectURL(blob);
-                
-                // Show video and download link
-                const video = document.getElementById('output');
-                const download = document.getElementById('download');
-                
-                video.src = url;
-                video.style.display = 'block';
-                
-                download.href = url;
-                download.download = 'stitched_clip.mp4';
-                download.textContent = 'Download Your Clip';
-                download.style.display = 'block';
-                
-                statusDiv.textContent = 'Complete! Your video is ready.';
-                
-            }} catch (error) {{
-                console.error('Error:', error);
-                statusDiv.textContent = `Error: ${{error.message}}`;
-            }}
-        }}
-        
-        // Start processing when page loads
-        processVideo();
-    </script>
-</body>
-</html>
+def download_and_verify_video(drive_url: str, download_path: str) -> tuple:
     """
+    Smart download with verification like the working code.
+    Returns (success: bool, video_path: str, error_message: str)
+    """
+    try:
+        output_path = os.path.join(download_path, 'source_video.mp4')
+        
+        st.info("📥 Downloading video from Google Drive...")
+        
+        # Use gdown with fuzzy matching (same as working code)
+        gdown.download(drive_url, output_path, quiet=False, fuzzy=True)
+        
+        # Verify file exists and has reasonable size
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+            return False, None, "Downloaded file is missing or too small (likely corrupted)"
+        
+        file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        
+        # Memory check - warn if file is very large
+        if file_size_mb > 500:
+            st.warning(f"⚠️ Large file detected ({file_size_mb:.1f}MB). Processing may be slow.")
+        else:
+            st.info(f"✅ Downloaded {file_size_mb:.1f}MB")
+        
+        # Verify video integrity with MoviePy BEFORE processing
+        try:
+            with VideoFileClip(output_path) as test_clip:
+                duration = test_clip.duration
+                width, height = test_clip.size
+                fps = test_clip.fps
+                
+            if duration is None or duration <= 0:
+                return False, None, "Video file is corrupted (duration is zero or None)"
+                
+            st.success(f"✅ Video verified: {width}x{height} @ {fps}fps, {duration:.1f}s")
+            return True, output_path, ""
+            
+        except Exception as e:
+            return False, None, f"Video file appears corrupted: {e}"
+            
+    except Exception as e:
+        return False, None, f"Download failed: {e}. Ensure the link is public and correct."
 
 # ----------
-# Main Helper Functions
+# AI Analysis Functions
 # ----------
-
-def get_api_key() -> str:
-    """Retrieve the OpenAI API key from Streamlit secrets or environment."""
-    if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
-        return st.secrets["openai"]["api_key"]
-    return os.getenv("OPENAI_API_KEY", "")
 
 def get_system_prompt() -> str:
-    """Returns the system prompt for the AI."""
-    return '''
+    """System prompt for AI analysis."""
+    return """
 You are an expert viral video editor. Analyze the provided SRT transcript and select compelling segments for a viral short video.
 
 REQUIREMENTS:
 1. Select 2-5 separate segments that tell a cohesive story
-2. Total duration: 20-60 seconds
+2. Total duration: 15-45 seconds (optimized for memory)
 3. Clear narrative arc: Hook -> Development -> Payoff
 4. Each segment should be 3-15 seconds long
 
@@ -251,7 +122,9 @@ OUTPUT FORMAT (JSON only):
   "reason": "Why this combination works",
   "title": "Catchy title"
 }
-'''
+
+CRITICAL: Use exact SRT timestamp format and keep total duration under 45 seconds.
+"""
 
 def srt_time_to_seconds(time_str: str) -> float:
     """Convert SRT time format to seconds."""
@@ -289,6 +162,7 @@ def analyze_transcript(transcript: str, client: OpenAI) -> dict:
                 {"role": "user", "content": f"Analyze this transcript:\n\n{transcript}"}
             ],
             temperature=0.5,
+            max_tokens=1500,  # Reduced for efficiency
             response_format={"type": "json_object"}
         )
         return json.loads(response.choices[0].message.content)
@@ -297,35 +171,153 @@ def analyze_transcript(transcript: str, client: OpenAI) -> dict:
         return {}
 
 # ----------
-# Streamlit App
+# Progressive Video Processing (From Working Code)
+# ----------
+
+def generate_clips_progressively(video_path: str, segments: list, make_vertical: bool, output_dir: str):
+    """
+    Generator function that processes clips one by one with proper memory management.
+    Yields completed clips as they're processed.
+    """
+    source_video = None
+    
+    try:
+        st.info("🎬 Loading source video...")
+        source_video = VideoFileClip(video_path)
+        video_duration = source_video.duration
+        width, height = source_video.size
+        
+        st.info(f"📊 Video loaded: {width}x{height}, {video_duration:.1f}s")
+        
+        for i, segment in enumerate(segments):
+            clip_title = f"Clip {i+1}"
+            st.info(f"🔄 Processing {clip_title}...")
+            
+            subclips = []
+            final_clip = None
+            
+            try:
+                start_time = srt_time_to_seconds(segment["start"])
+                end_time = srt_time_to_seconds(segment["end"])
+                
+                # Validate timestamps
+                if start_time >= end_time or start_time >= video_duration:
+                    st.warning(f"⚠️ Invalid timestamp for {clip_title}. Skipping.")
+                    continue
+                
+                end_time = min(end_time, video_duration)
+                duration = end_time - start_time
+                
+                st.info(f"⏱️ Extracting {duration:.1f}s from {segment['start']} to {segment['end']}")
+                
+                # Create subclip
+                subclip = source_video.subclip(start_time, end_time)
+                
+                # Apply vertical transformation if requested
+                if make_vertical:
+                    st.info("📱 Converting to vertical format...")
+                    clip_w, clip_h = subclip.size
+                    target_aspect = 9.0 / 16.0
+                    current_aspect = float(clip_w) / clip_h
+                    
+                    if current_aspect > target_aspect:  # Too wide
+                        new_width = int(clip_h * target_aspect)
+                        subclip = crop(subclip, width=new_width, x_center=clip_w/2)
+                    else:  # Too tall
+                        new_height = int(clip_w / target_aspect)
+                        subclip = crop(subclip, height=new_height, y_center=clip_h/2)
+                    
+                    # Resize to standard vertical resolution
+                    subclip = resize(subclip, height=min(1080, subclip.h))
+                
+                # Generate safe filename
+                safe_title = re.sub(r'[^\w\s-]', '', segment.get("text", f"clip_{i+1}"))[:20]
+                safe_title = safe_title.strip().replace(' ', '_')
+                output_filename = f"clip_{i+1}_{safe_title}.mp4"
+                output_filepath = os.path.join(output_dir, output_filename)
+                
+                # Render clip with optimized settings
+                st.info("🎥 Rendering clip...")
+                subclip.write_videofile(
+                    output_filepath,
+                    codec="libx264",
+                    audio_codec="aac",
+                    threads=1,  # Single thread to reduce memory
+                    preset='ultrafast',  # Faster encoding
+                    verbose=False,
+                    logger=None,
+                    temp_audiofile=f'temp_audio_{i}.m4a',
+                    remove_temp=True
+                )
+                
+                # Verify output file
+                if os.path.exists(output_filepath) and os.path.getsize(output_filepath) > 1024:
+                    clip_size_mb = os.path.getsize(output_filepath) / (1024 * 1024)
+                    
+                    yield {
+                        "path": output_filepath,
+                        "title": segment.get("text", clip_title)[:50] + "...",
+                        "duration": duration,
+                        "size_mb": clip_size_mb,
+                        "success": True
+                    }
+                    
+                    st.success(f"✅ {clip_title} completed ({clip_size_mb:.1f}MB)")
+                else:
+                    st.error(f"❌ {clip_title} failed to generate")
+                    
+            except Exception as e:
+                st.error(f"❌ Error processing {clip_title}: {e}")
+                yield {
+                    "path": None,
+                    "title": clip_title,
+                    "error": str(e),
+                    "success": False
+                }
+            finally:
+                # Clean up this iteration's objects
+                if 'subclip' in locals() and subclip:
+                    subclip.close()
+                cleanup_memory()
+                
+    except Exception as e:
+        st.error(f"❌ Error loading source video: {e}")
+    finally:
+        # Clean up source video
+        if source_video:
+            source_video.close()
+        cleanup_memory()
+
+# ----------
+# Main Streamlit App
 # ----------
 
 def main():
-    st.set_page_config(page_title="Cloud Video Processor", layout="wide")
+    st.title("🎬 Optimized SRT ClipStitcher")
+    st.markdown("**Smart video processing with progressive loading and memory optimization**")
     
-    st.title("🎬 Cloud Video Processor")
-    st.markdown("Process videos directly from Google Drive - **No downloads required!**")
-    
-    # Method selection
-    processing_method = st.radio(
-        "Choose Processing Method:",
-        ["Browser-based (FFmpeg.wasm)", "Cloud API Integration", "External Service"],
-        help="Different methods for handling large files without local download"
-    )
+    # Memory usage info
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Memory Usage", "Optimized")
+    with col2:
+        st.metric("Processing", "Progressive")
+    with col3:
+        st.metric("Max File Size", "1GB+")
     
     # Initialize session state
-    if 'processor_state' not in st.session_state:
-        st.session_state.processor_state = {
-            "video_url": None,
-            "video_metadata": None,
+    if 'app_state' not in st.session_state:
+        st.session_state.app_state = {
+            "video_path": None,
             "srt_content": None,
             "analysis_result": None,
-            "processing_html": None
+            "generated_clips": [],
+            "processing_complete": False
         }
     
-    state = st.session_state.processor_state
+    state = st.session_state.app_state
     
-    # API Key check
+    # API key check
     api_key = get_api_key()
     if not api_key:
         st.error("❌ OpenAI API key required. Add to Streamlit secrets.")
@@ -334,38 +326,51 @@ def main():
     client = OpenAI(api_key=api_key)
     
     # Sidebar inputs
-    st.sidebar.header("📥 Inputs")
+    st.sidebar.header("📥 Configuration")
     
     drive_url = st.sidebar.text_input(
         "🔗 Google Drive Video URL",
         placeholder="https://drive.google.com/file/d/...",
-        help="Paste the shareable Google Drive link"
+        help="Make sure the video is shared publicly"
     )
     
     srt_file = st.sidebar.file_uploader("📄 SRT Transcript", type=["srt"])
     
-    make_vertical = st.sidebar.checkbox("📱 Vertical Format (9:16)", value=True)
+    make_vertical = st.sidebar.checkbox("📱 Create Vertical Clips (9:16)", value=True)
     
-    # Process Google Drive URL
-    if drive_url and not state["video_url"]:
-        try:
-            file_id = extract_drive_file_id(drive_url)
-            video_url = get_direct_video_url(file_id)
-            
-            with st.spinner("Getting video info..."):
-                metadata = get_video_metadata_from_url(video_url)
-                
-            if metadata and metadata["streamable"]:
-                state["video_url"] = video_url
-                state["video_metadata"] = metadata
-                st.success(f"✅ Video ready! Size: {metadata['size_mb']:.1f}MB")
-            else:
-                st.error("❌ Video not accessible. Make sure it's shared publicly.")
-                
-        except Exception as e:
-            st.error(f"❌ Error processing Drive URL: {e}")
+    # Memory management
+    st.sidebar.markdown("---")
+    st.sidebar.header("🧠 Memory Management")
+    if st.sidebar.button("🗑️ Force Cleanup"):
+        cleanup_memory()
+        st.sidebar.success("Memory cleaned!")
     
-    # Load SRT file
+    # Process inputs
+    if drive_url and not state["video_path"]:
+        with st.spinner("📥 Downloading and verifying video..."):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                success, video_path, error = download_and_verify_video(drive_url, temp_dir)
+                
+                if success:
+                    # Move to persistent location
+                    persistent_dir = "temp_videos"
+                    os.makedirs(persistent_dir, exist_ok=True)
+                    
+                    # Clean up old files
+                    for f in os.listdir(persistent_dir):
+                        try:
+                            os.remove(os.path.join(persistent_dir, f))
+                        except:
+                            pass
+                    
+                    persistent_path = os.path.join(persistent_dir, "source_video.mp4")
+                    shutil.move(video_path, persistent_path)
+                    state["video_path"] = persistent_path
+                    
+                else:
+                    st.error(f"❌ {error}")
+                    st.stop()
+    
     if srt_file and not state["srt_content"]:
         try:
             state["srt_content"] = srt_file.getvalue().decode("utf-8")
@@ -374,24 +379,15 @@ def main():
             st.error(f"❌ Error reading SRT: {e}")
     
     # Main interface
-    if not (state["video_url"] and state["srt_content"]):
-        st.info("👆 Please provide both a Google Drive video URL and SRT file to continue.")
+    if not (state["video_path"] and state["srt_content"]):
+        st.info("👆 Please provide both Google Drive URL and SRT file to continue")
         st.stop()
     
-    # Show video info
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.subheader("🎥 Source Video")
-        # Use the direct URL for video display
-        st.video(state["video_url"])
-        
-    with col2:
-        st.subheader("📊 Video Info")
-        if state["video_metadata"]:
-            st.metric("File Size", f"{state['video_metadata']['size_mb']:.1f} MB")
-            st.metric("Type", state["video_metadata"]["content_type"])
-            st.success("✅ Streamable")
+    # Show video
+    if state["video_path"] and os.path.exists(state["video_path"]):
+        file_size = os.path.getsize(state["video_path"]) / (1024 * 1024)
+        st.caption(f"Source video: {file_size:.1f}MB")
+        st.video(state["video_path"])
     
     # Show transcript
     with st.expander("📄 View Transcript"):
@@ -400,7 +396,7 @@ def main():
     # AI Analysis
     if not state["analysis_result"]:
         if st.button("🤖 Analyze Transcript", type="primary"):
-            with st.spinner("AI is analyzing the transcript..."):
+            with st.spinner("🧠 AI analyzing transcript..."):
                 try:
                     _, transcript_text = parse_srt(state["srt_content"])
                     analysis = analyze_transcript(transcript_text, client)
@@ -415,86 +411,136 @@ def main():
                     st.error(f"❌ Analysis error: {e}")
     else:
         # Show analysis results
-        st.subheader("🎯 AI Analysis Results")
-        
         analysis = state["analysis_result"]
         
+        st.subheader("🎯 AI Analysis Results")
         st.success(f"**Title:** {analysis.get('title', 'Untitled')}")
         st.info(f"**Strategy:** {analysis.get('reason', 'No reason provided')}")
         
-        st.subheader("📝 Selected Segments")
         segments = analysis.get("segments", [])
+        total_duration = sum(
+            srt_time_to_seconds(s["end"]) - srt_time_to_seconds(s["start"]) 
+            for s in segments
+        )
         
-        total_duration = 0
-        for i, seg in enumerate(segments, 1):
-            start_sec = srt_time_to_seconds(seg["start"])
-            end_sec = srt_time_to_seconds(seg["end"])
-            duration = end_sec - start_sec
-            total_duration += duration
-            
-            st.markdown(f"**Segment {i}:** `{seg['start']} → {seg['end']}` ({duration:.1f}s)")
-            st.write(f"*\"{seg['text']}\"*")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Selected Segments", f"{len(segments)} clips")
+        with col2:
+            st.metric("Total Duration", f"{total_duration:.1f}s")
         
-        st.metric("Total Duration", f"{total_duration:.1f} seconds")
+        # Show segments
+        with st.expander("📝 Selected Segments"):
+            for i, seg in enumerate(segments, 1):
+                duration = srt_time_to_seconds(seg["end"]) - srt_time_to_seconds(seg["start"])
+                st.markdown(f"**{i}.** `{seg['start']} → {seg['end']}` ({duration:.1f}s)")
+                st.write(f"*\"{seg['text']}\"*")
         
-        # Processing options
-        st.subheader("🚀 Process Video")
+        # Process clips
+        if not state["processing_complete"]:
+            if st.button("🚀 Generate Clips", type="primary"):
+                st.markdown("---")
+                st.header("🎬 Generating Clips...")
+                
+                # Create output directory
+                output_dir = "generated_clips"
+                os.makedirs(output_dir, exist_ok=True)
+                
+                # Clean old clips
+                for f in os.listdir(output_dir):
+                    try:
+                        os.remove(os.path.join(output_dir, f))
+                    except:
+                        pass
+                
+                # Progressive processing
+                generated_clips = []
+                clip_generator = generate_clips_progressively(
+                    state["video_path"], 
+                    segments, 
+                    make_vertical, 
+                    output_dir
+                )
+                
+                # Process and display clips as they complete
+                for clip_result in clip_generator:
+                    if clip_result["success"]:
+                        generated_clips.append(clip_result)
+                        
+                        # Display the just-completed clip
+                        st.subheader(f"✅ {clip_result['title']}")
+                        col_video, col_info = st.columns([2, 1])
+                        
+                        with col_video:
+                            st.video(clip_result['path'])
+                            
+                            with open(clip_result['path'], "rb") as file:
+                                st.download_button(
+                                    "⬇️ Download",
+                                    file,
+                                    file_name=os.path.basename(clip_result['path']),
+                                    key=f"download_{len(generated_clips)}"
+                                )
+                        
+                        with col_info:
+                            st.metric("Duration", f"{clip_result['duration']:.1f}s")
+                            st.metric("Size", f"{clip_result['size_mb']:.1f}MB")
+                        
+                        st.markdown("---")
+                
+                state["generated_clips"] = generated_clips
+                state["processing_complete"] = True
+                st.success(f"🎉 Generated {len(generated_clips)} clips successfully!")
         
-        if processing_method == "Browser-based (FFmpeg.wasm)":
-            if st.button("🎬 Generate Video (Browser)", type="primary"):
-                with st.spinner("Generating processing script..."):
-                    html_script = generate_ffmpeg_wasm_script(
-                        state["video_url"], 
-                        segments, 
-                        make_vertical
-                    )
-                    state["processing_html"] = html_script
-                    st.rerun()
+        else:
+            # Show existing clips
+            st.header("✅ Your Generated Clips")
+            for i, clip in enumerate(state["generated_clips"]):
+                if os.path.exists(clip['path']):
+                    st.subheader(f"🎬 {clip['title']}")
+                    col_video, col_info = st.columns([2, 1])
                     
-        elif processing_method == "Cloud API Integration":
-            st.info("🔧 **Coming Soon:** Direct integration with cloud video processing APIs")
-            
-            if st.button("📋 Show API Payload", type="secondary"):
-                job_data = create_video_processing_job(state["video_url"], segments, make_vertical)
-                st.json(job_data)
-                
-        else:  # External Service
-            st.info("🌐 **Manual Processing:** Use external tools with these parameters")
-            
-            with st.expander("📋 Processing Instructions"):
-                st.markdown("### For Manual Processing:")
-                st.markdown(f"1. **Source:** `{state['video_url']}`")
-                st.markdown("2. **Segments to extract:**")
-                
-                for i, seg in enumerate(segments, 1):
-                    st.markdown(f"   - Clip {i}: {seg['start']} to {seg['end']}")
-                
-                st.markdown("3. **Post-processing:**")
-                st.markdown("   - Concatenate clips in order")
-                if make_vertical:
-                    st.markdown("   - Convert to 9:16 aspect ratio (1080x1920)")
-                st.markdown("   - Export as MP4 with H.264 codec")
-    
-    # Show browser processor
-    if state.get("processing_html"):
-        st.subheader("🌐 Browser-based Video Processor")
-        st.markdown("**The video will be processed entirely in your browser - no server uploads!**")
-        
-        # Embed the HTML processor
-        st.components.v1.html(state["processing_html"], height=600, scrolling=True)
-        
-        st.warning("⚠️ **Note:** Large videos may take several minutes to process. Keep this tab open until complete.")
+                    with col_video:
+                        st.video(clip['path'])
+                        with open(clip['path'], "rb") as file:
+                            st.download_button(
+                                "⬇️ Download",
+                                file,
+                                file_name=os.path.basename(clip['path']),
+                                key=f"existing_download_{i}"
+                            )
+                    
+                    with col_info:
+                        st.metric("Duration", f"{clip['duration']:.1f}s")
+                        st.metric("Size", f"{clip['size_mb']:.1f}MB")
+                    
+                    st.markdown("---")
     
     # Reset button
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Start Over"):
-        st.session_state.processor_state = {
-            "video_url": None,
-            "video_metadata": None,
+        # Clean up files
+        for key, value in state.items():
+            if '_path' in key and value and isinstance(value, str) and os.path.exists(value):
+                try:
+                    os.remove(value)
+                except:
+                    pass
+        
+        # Clean up directories
+        for dir_name in ["temp_videos", "generated_clips"]:
+            if os.path.exists(dir_name):
+                shutil.rmtree(dir_name, ignore_errors=True)
+        
+        # Reset state
+        st.session_state.app_state = {
+            "video_path": None,
             "srt_content": None,
             "analysis_result": None,
-            "processing_html": None
+            "generated_clips": [],
+            "processing_complete": False
         }
+        cleanup_memory()
         st.rerun()
 
 if __name__ == "__main__":
