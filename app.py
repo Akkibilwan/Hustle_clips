@@ -53,47 +53,32 @@ def extract_drive_file_id(drive_url: str) -> str:
 
 def download_and_verify_video(drive_url: str, download_path: str) -> tuple:
     """
-    Smart download with verification like the working code.
+    Exact same download logic as the working code.
     Returns (success: bool, video_path: str, error_message: str)
     """
     try:
-        output_path = os.path.join(download_path, 'source_video.mp4')
+        output_path = os.path.join(download_path, 'downloaded_video.mp4')  # Same filename as working code
         
-        st.info("📥 Downloading video from Google Drive...")
-        
-        # Use gdown with fuzzy matching (same as working code)
+        # Exact same download call as working code
         gdown.download(drive_url, output_path, quiet=False, fuzzy=True)
         
-        # Verify file exists and has reasonable size
+        # Exact same verification as working code
         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-            return False, None, "Downloaded file is missing or too small (likely corrupted)"
+            return False, None, "Downloaded file is missing or empty."
         
-        file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
-        
-        # Memory check - warn if file is very large
-        if file_size_mb > 500:
-            st.warning(f"⚠️ Large file detected ({file_size_mb:.1f}MB). Processing may be slow.")
-        else:
-            st.info(f"✅ Downloaded {file_size_mb:.1f}MB")
-        
-        # Verify video integrity with MoviePy BEFORE processing
+        # Exact same MoviePy verification as working code
         try:
-            with VideoFileClip(output_path) as test_clip:
-                duration = test_clip.duration
-                width, height = test_clip.size
-                fps = test_clip.fps
-                
+            with VideoFileClip(output_path) as clip:
+                duration = clip.duration
             if duration is None or duration <= 0:
-                return False, None, "Video file is corrupted (duration is zero or None)"
-                
-            st.success(f"✅ Video verified: {width}x{height} @ {fps}fps, {duration:.1f}s")
+                return False, None, "Video file is corrupted (duration is zero or None)."
+            st.info(f"Verified downloaded file. Duration: {duration:.2f} seconds.")
             return True, output_path, ""
-            
         except Exception as e:
-            return False, None, f"Video file appears corrupted: {e}"
+            return False, None, f"Downloaded file appears to be corrupted and cannot be read by MoviePy. Error: {e}. This often happens with incomplete downloads. Please check the Google Drive sharing settings and try again."
             
     except Exception as e:
-        return False, None, f"Download failed: {e}. Ensure the link is public and correct."
+        return False, None, f"Google Drive download failed: {e}. Ensure the link is public and correct."
 
 # ----------
 # AI Analysis Functions
@@ -176,117 +161,95 @@ def analyze_transcript(transcript: str, client: OpenAI) -> dict:
 
 def generate_clips_progressively(video_path: str, segments: list, make_vertical: bool, output_dir: str):
     """
-    Generator function that processes clips one by one with proper memory management.
+    Exact same progressive processing logic as the working code.
     Yields completed clips as they're processed.
     """
-    source_video = None
+    source_video = VideoFileClip(video_path)
+    video_duration = source_video.duration
     
-    try:
-        st.info("🎬 Loading source video...")
-        source_video = VideoFileClip(video_path)
-        video_duration = source_video.duration
-        width, height = source_video.size
-        
-        st.info(f"📊 Video loaded: {width}x{height}, {video_duration:.1f}s")
-        
-        for i, segment in enumerate(segments):
-            clip_title = f"Clip {i+1}"
-            st.info(f"🔄 Processing {clip_title}...")
-            
+    for i, segment in enumerate(segments):
+        st.info(f"Processing Clip {i+1}/{len(segments)}: '{segment.get('text', 'Clip')[:30]}...'")
+        try:
             subclips = []
-            final_clip = None
+            start_time = srt_time_to_seconds(segment["start"])
+            end_time = srt_time_to_seconds(segment["end"])
             
-            try:
-                start_time = srt_time_to_seconds(segment["start"])
-                end_time = srt_time_to_seconds(segment["end"])
+            # Validate timestamps (same as working code)
+            if start_time < video_duration and end_time <= video_duration:
+                subclips.append(source_video.subclip(start_time, end_time))
+            else:
+                st.warning(f"Segment {segment['start']} -> {segment['end']} is out of video bounds. Skipping.")
+                continue
+            
+            if not subclips:
+                st.error(f"No valid segments for clip. Skipping.")
+                continue
+
+            final_clip = concatenate_videoclips(subclips) if len(subclips) > 1 else subclips[0]
+            
+            # Apply vertical transformation if requested
+            if make_vertical:
+                clip_w, clip_h = final_clip.size
+                target_aspect = 9.0 / 16.0
+                current_aspect = float(clip_w) / clip_h
                 
-                # Validate timestamps
-                if start_time >= end_time or start_time >= video_duration:
-                    st.warning(f"⚠️ Invalid timestamp for {clip_title}. Skipping.")
-                    continue
+                if current_aspect > target_aspect:  # Too wide
+                    new_width = int(clip_h * target_aspect)
+                    final_clip = crop(final_clip, width=new_width, x_center=clip_w/2)
+                else:  # Too tall
+                    new_height = int(clip_w / target_aspect)
+                    final_clip = crop(final_clip, height=new_height, y_center=clip_h/2)
                 
-                end_time = min(end_time, video_duration)
+                # Resize to standard vertical resolution
+                final_clip = resize(final_clip, height=min(1080, final_clip.h))
+            
+            # Generate filename (same pattern as working code)
+            safe_title = re.sub(r'[^\w\s-]', '', segment.get("text", f"clip_{i+1}")).strip().replace(' ', '_')
+            output_filepath = os.path.join(output_dir, f"clip_{i+1}_{safe_title[:20]}.mp4")
+            
+            # Render with same settings as working code
+            final_clip.write_videofile(
+                output_filepath, 
+                codec="libx264", 
+                audio_codec="aac", 
+                temp_audiofile=f'temp-audio_{i}.m4a', 
+                remove_temp=True, 
+                logger=None
+            )
+            
+            # Calculate file info
+            if os.path.exists(output_filepath):
                 duration = end_time - start_time
+                size_mb = os.path.getsize(output_filepath) / (1024 * 1024)
                 
-                st.info(f"⏱️ Extracting {duration:.1f}s from {segment['start']} to {segment['end']}")
-                
-                # Create subclip
-                subclip = source_video.subclip(start_time, end_time)
-                
-                # Apply vertical transformation if requested
-                if make_vertical:
-                    st.info("📱 Converting to vertical format...")
-                    clip_w, clip_h = subclip.size
-                    target_aspect = 9.0 / 16.0
-                    current_aspect = float(clip_w) / clip_h
-                    
-                    if current_aspect > target_aspect:  # Too wide
-                        new_width = int(clip_h * target_aspect)
-                        subclip = crop(subclip, width=new_width, x_center=clip_w/2)
-                    else:  # Too tall
-                        new_height = int(clip_w / target_aspect)
-                        subclip = crop(subclip, height=new_height, y_center=clip_h/2)
-                    
-                    # Resize to standard vertical resolution
-                    subclip = resize(subclip, height=min(1080, subclip.h))
-                
-                # Generate safe filename
-                safe_title = re.sub(r'[^\w\s-]', '', segment.get("text", f"clip_{i+1}"))[:20]
-                safe_title = safe_title.strip().replace(' ', '_')
-                output_filename = f"clip_{i+1}_{safe_title}.mp4"
-                output_filepath = os.path.join(output_dir, output_filename)
-                
-                # Render clip with optimized settings
-                st.info("🎥 Rendering clip...")
-                subclip.write_videofile(
-                    output_filepath,
-                    codec="libx264",
-                    audio_codec="aac",
-                    threads=1,  # Single thread to reduce memory
-                    preset='ultrafast',  # Faster encoding
-                    verbose=False,
-                    logger=None,
-                    temp_audiofile=f'temp_audio_{i}.m4a',
-                    remove_temp=True
-                )
-                
-                # Verify output file
-                if os.path.exists(output_filepath) and os.path.getsize(output_filepath) > 1024:
-                    clip_size_mb = os.path.getsize(output_filepath) / (1024 * 1024)
-                    
-                    yield {
-                        "path": output_filepath,
-                        "title": segment.get("text", clip_title)[:50] + "...",
-                        "duration": duration,
-                        "size_mb": clip_size_mb,
-                        "success": True
-                    }
-                    
-                    st.success(f"✅ {clip_title} completed ({clip_size_mb:.1f}MB)")
-                else:
-                    st.error(f"❌ {clip_title} failed to generate")
-                    
-            except Exception as e:
-                st.error(f"❌ Error processing {clip_title}: {e}")
                 yield {
-                    "path": None,
-                    "title": clip_title,
-                    "error": str(e),
-                    "success": False
+                    "path": output_filepath,
+                    "title": segment.get("text", f"Clip {i+1}")[:50] + "...",
+                    "duration": duration,
+                    "size_mb": size_mb,
+                    "success": True
                 }
-            finally:
-                # Clean up this iteration's objects
-                if 'subclip' in locals() and subclip:
-                    subclip.close()
-                cleanup_memory()
                 
-    except Exception as e:
-        st.error(f"❌ Error loading source video: {e}")
-    finally:
-        # Clean up source video
-        if source_video:
-            source_video.close()
-        cleanup_memory()
+                st.success(f"✅ Generated clip: Clip {i+1}")
+            
+        except Exception as e:
+            st.error(f"Failed to generate clip {i+1}: {e}")
+            yield {
+                "path": None,
+                "title": f"Clip {i+1}",
+                "error": str(e),
+                "success": False
+            }
+        finally:
+            # Exact same cleanup as working code
+            if 'final_clip' in locals(): 
+                final_clip.close()
+            if 'subclips' in locals():
+                for sc in subclips: 
+                    sc.close()
+            cleanup_memory()
+
+    source_video.close()
 
 # ----------
 # Main Streamlit App
@@ -347,12 +310,13 @@ def main():
     
     # Process inputs
     if drive_url and not state["video_path"]:
-        with st.spinner("📥 Downloading and verifying video..."):
-            with tempfile.TemporaryDirectory() as temp_dir:
+        # Use temporary directory exactly like working code
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with st.spinner("⬇️ Downloading video from Google Drive..."):
                 success, video_path, error = download_and_verify_video(drive_url, temp_dir)
                 
                 if success:
-                    # Move to persistent location
+                    # Move to persistent location (same pattern as working code)
                     persistent_dir = "temp_videos"
                     os.makedirs(persistent_dir, exist_ok=True)
                     
@@ -363,9 +327,10 @@ def main():
                         except:
                             pass
                     
-                    persistent_path = os.path.join(persistent_dir, "source_video.mp4")
+                    persistent_path = os.path.join(persistent_dir, "downloaded_video.mp4")  # Same name as working code
                     shutil.move(video_path, persistent_path)
                     state["video_path"] = persistent_path
+                    st.success("✅ Video downloaded and verified.")
                     
                 else:
                     st.error(f"❌ {error}")
@@ -442,55 +407,67 @@ def main():
                 st.markdown("---")
                 st.header("🎬 Generating Clips...")
                 
-                # Create output directory
-                output_dir = "generated_clips"
-                os.makedirs(output_dir, exist_ok=True)
-                
-                # Clean old clips
-                for f in os.listdir(output_dir):
+                # Use temporary directory for processing (like working code)
+                with tempfile.TemporaryDirectory() as temp_dir:
                     try:
-                        os.remove(os.path.join(output_dir, f))
-                    except:
-                        pass
-                
-                # Progressive processing
-                generated_clips = []
-                clip_generator = generate_clips_progressively(
-                    state["video_path"], 
-                    segments, 
-                    make_vertical, 
-                    output_dir
-                )
-                
-                # Process and display clips as they complete
-                for clip_result in clip_generator:
-                    if clip_result["success"]:
-                        generated_clips.append(clip_result)
+                        # Create persistent output directory
+                        persistent_dir = "generated_clips"
+                        os.makedirs(persistent_dir, exist_ok=True)
                         
-                        # Display the just-completed clip
-                        st.subheader(f"✅ {clip_result['title']}")
-                        col_video, col_info = st.columns([2, 1])
+                        # Clean old clips
+                        for f in os.listdir(persistent_dir):
+                            try:
+                                os.remove(os.path.join(persistent_dir, f))
+                            except:
+                                pass
                         
-                        with col_video:
-                            st.video(clip_result['path'])
-                            
-                            with open(clip_result['path'], "rb") as file:
-                                st.download_button(
-                                    "⬇️ Download",
-                                    file,
-                                    file_name=os.path.basename(clip_result['path']),
-                                    key=f"download_{len(generated_clips)}"
-                                )
+                        # Progressive processing exactly like working code
+                        generated_clips = []
+                        clip_generator = generate_clips_progressively(
+                            state["video_path"], 
+                            segments, 
+                            make_vertical, 
+                            temp_dir  # Process in temp directory
+                        )
                         
-                        with col_info:
-                            st.metric("Duration", f"{clip_result['duration']:.1f}s")
-                            st.metric("Size", f"{clip_result['size_mb']:.1f}MB")
+                        # Process and display clips as they complete
+                        for clip_result in clip_generator:
+                            if clip_result["success"]:
+                                # Move file to persistent storage immediately (like working code)
+                                new_path = os.path.join(persistent_dir, os.path.basename(clip_result['path']))
+                                shutil.move(clip_result['path'], new_path)
+                                clip_result['path'] = new_path
+                                
+                                generated_clips.append(clip_result)
+                                
+                                # Display the just-completed clip
+                                st.subheader(f"✅ {clip_result['title']}")
+                                col_video, col_info = st.columns([2, 1])
+                                
+                                with col_video:
+                                    st.video(clip_result['path'])
+                                    
+                                    with open(clip_result['path'], "rb") as file:
+                                        st.download_button(
+                                            "⬇️ Download",
+                                            file,
+                                            file_name=os.path.basename(clip_result['path']),
+                                            key=f"download_{len(generated_clips)}"
+                                        )
+                                
+                                with col_info:
+                                    st.metric("Duration", f"{clip_result['duration']:.1f}s")
+                                    st.metric("Size", f"{clip_result['size_mb']:.1f}MB")
+                                
+                                st.markdown("---")
                         
-                        st.markdown("---")
-                
-                state["generated_clips"] = generated_clips
-                state["processing_complete"] = True
-                st.success(f"🎉 Generated {len(generated_clips)} clips successfully!")
+                        state["generated_clips"] = generated_clips
+                        state["processing_complete"] = True
+                        st.success(f"🎉 Generated {len(generated_clips)} clips successfully!")
+                        
+                    except Exception as e:
+                        st.error(f"An error occurred during clip generation: {e}")
+                        st.code(traceback.format_exc())
         
         else:
             # Show existing clips
