@@ -190,6 +190,7 @@ def download_drive_file(drive_url: str, download_path: str) -> str:
     except Exception as e:
         raise Exception(f"Google Drive download failed: {e}.")
 
+# MODIFIED: This function is now optimized for memory
 def generate_clips_progressively(video_path: str, clips_data: list, output_dir: str):
     try:
         source_video = VideoFileClip(video_path)
@@ -206,15 +207,9 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 start_time, end_time = ts['start_sec'], ts['end_sec']
                 if start_time < video_duration and end_time <= video_duration and start_time < end_time:
                     subclips.append(source_video.subclip(start_time, end_time))
-                    
-                    # *** THIS IS THE FIX ***
-                    # Explicitly create the dictionary for valid_segments to ensure data consistency.
-                    # This prevents KeyErrors during the final display loop.
                     valid_segments.append({
-                        'label': ts.get('label', 'SEG'),
-                        'start_str': ts.get('start_str', '00:00:00,000'),
-                        'end_str': ts.get('end_str', '00:00:00,000'),
-                        'duration': ts.get('duration', 0.0)
+                        'label': ts.get('label', 'SEG'), 'start_str': ts.get('start_str', '00:00:00,000'),
+                        'end_str': ts.get('end_str', '00:00:00,000'), 'duration': ts.get('duration', 0.0)
                     })
                 else:
                     st.warning(f"  ⚠️ Skipping segment {ts.get('label', 'Unknown')} (out of bounds).")
@@ -228,8 +223,19 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
             safe_title = re.sub(r'[^\w\s-]', '', clip_data['title']).strip().replace(' ', '_')
             output_filepath = os.path.join(output_dir, f"clip_{i+1}_{safe_title[:30]}.mp4")
             
-            st.info(f"🎥 Rendering '{clip_data['title']}' ({total_duration:.1f}s)...")
-            final_clip.write_videofile(output_filepath, codec="libx264", audio_codec="aac", temp_audiofile=f'temp-audio_{i}.m4a', remove_temp=True, logger='bar')
+            st.info(f"🎥 Rendering '{clip_data['title']}' ({total_duration:.1f}s)... (This may be slow for large files)")
+            
+            # *** OPTIMIZATION APPLIED HERE ***
+            final_clip.write_videofile(
+                output_filepath,
+                codec="libx264",
+                audio_codec="aac",
+                temp_audiofile=f'temp-audio_{i}.m4a',
+                remove_temp=True,
+                logger='bar',
+                threads=4,  # Limit threads to reduce memory usage
+                preset='ultrafast' # Prioritize speed over compression to reduce memory pressure
+            )
             
             yield {
                 "path": output_filepath, "title": clip_data['title'], "theme_category": clip_data.get('theme_category', 'General'),
@@ -241,6 +247,7 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
         except Exception as e:
             st.error(f"❌ Failed to generate clip '{clip_data['title']}': {e}")
         finally:
+            # Important: Close all clip objects to free up memory
             if 'final_clip' in locals(): final_clip.close()
             for sc in subclips: sc.close()
     
@@ -275,6 +282,8 @@ def main():
         video_url = st.text_input("Public Google Drive URL", placeholder="https://drive.google.com/...")
         uploaded_transcript = st.file_uploader("Upload Granular SRT Transcript", type=["srt", "txt"])
         st.info("Use a **granular (word-level)** SRT file for best results.")
+        # NEW: Warning about large files
+        st.warning("⚠️ **Large videos (>500MB) may fail on free hosting due to memory limits.** If the app crashes during rendering, please try a smaller video file.")
 
         st.subheader("2. Generation Settings")
         clips_count = st.slider("Number of Clips to Generate:", 1, 5, 2)
@@ -375,7 +384,6 @@ def main():
                 st.info(clip.get('viral_strategy', 'Not provided.'))
                 st.markdown("**Precision Cuts Made:**")
                 for seg in clip.get('valid_segments', []):
-                    # This line is now safe because 'valid_segments' is guaranteed to have the correct keys
                     st.markdown(f"- **{seg['label']}**: `{seg['start_str']} → {seg['end_str']}` ({seg['duration']:.1f}s)")
                 st.markdown("**Final Script:**")
                 st.text_area("Script", clip.get('script', ''), height=100, key=f"script_{i}", disabled=True)
