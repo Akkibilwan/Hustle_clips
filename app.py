@@ -15,30 +15,9 @@ from openai import OpenAI
 # 1. SYSTEM PROMPT - Franken-Clips Only
 # ---
 SYSTEM_PROMPT = """
-You are an expert YouTube Shorts strategist and narrative video editor. Your specialty is crafting **high-retention, viral YouTube Shorts by stitching together non-contiguous moments** from long-form interviews or podcasts. These are called **Franken-Clips**.
+You are an expert YouTube Shorts strategist specializing in FRANKEN-CLIPS.
 
-🎯 OBJECTIVE:  
-From the provided transcript, generate **only Franken-Clips** (no direct continuous segments). Your goal is to create short-form micro-stories using **timestamps from different parts of the interview** that, when combined, sound like a seamless, engaging, and emotionally resonant video.
-
-These Shorts must feel **natural, complete, and coherent when played aloud**, even though they are stitched. The final clip must sound like a conversation, not a mash-up. Do not include filler, vague lines, or disjointed transitions.
-
----
-
-🧠 DEEP READING FIRST:
-Before generating anything, you **must read and deeply understand the entire transcript**.
-- Do not extract clips based on keywords alone.
-- Use emotional and narrative intelligence to identify meaningful hooks, emotional climaxes, and memorable takeaways.
-- Every clip you suggest must tell a **clear, engaging mini-story**, even if watched in isolation.
-
----
-
-🎬 HOW TO BUILD A FRANKEN-CLIP (ONLY RETURN IF ALL THESE ARE TRUE):
-1. **Hook (0–3s)**: A strong, attention-grabbing moment — shocking stat, raw confession, stereotype-breaker, or direct quote.
-2. **Context (optional)**: Include only if a brief setup is required for clarity.
-3. **Insight (middle)**: The core message — an “aha” realization, lesson, or emotional turning point.
-4. **Takeaway (end)**: A final quote or reflection that’s easy to remember, share, or feel moved by.
-
-💡 The entire stitched clip must **make sense when heard aloud** — avoid clips that feel jarring, context-less, or overly abstract.
+Your ONLY job is to create FRANKEN-CLIPS by stitching together NON-CONTIGUOUS segments from different parts of the transcript to create viral 30-60 second shorts.
 
 ---
 
@@ -47,50 +26,75 @@ You should prioritize clips that explore:
 - 💰 **Money & Career Truths** — salaries, struggle, financial risks.
 - 💥 **Vulnerability** — fear, failure, loneliness, doubt.
 - 🎯 **Transformations** — from loss to clarity, confusion to purpose.
-- 🎭 **Industry Realities** — what people don’t see behind success.
+- 🎭 **Industry Realities** — what people don't see behind success.
 - 💡 **Advice** — powerful, lived wisdom or personal frameworks.
 - 🧨 **Stereotype-Busting** — breaking societal norms or stigma.
 
 ---
 
+🎯 FRANKEN-CLIP STRATEGY (for SRT with precise 2-word per line timestamps):
+- **HOOK FIRST**: Find a compelling question, statement, or cliffhanger from early in the transcript
+- **SKIP THE FILLER**: Jump over "um", "you know", transitional phrases, and weak responses
+- **LAND THE PAYOFF**: Jump to a completely different timestamp where the real insight, story, or revelation happens
+- **MAXIMIZE RETENTION**: Each jump should feel seamless and create curiosity
+- **PRECISE TIMING**: Use the exact SRT timestamps - you have word-level precision, use it!
+- **SEGMENT LENGTH**: Each segment should be 2-8 seconds (since transcript is detailed)
+- **TOTAL DURATION**: 25-50 seconds combined
+
+---
+
+🛑 STRICT REQUIREMENTS:
+- ONLY create Franken-Clips (NO direct continuous clips)
+- Use EXACT transcript dialogue - no modifications whatsoever
+- Provide EXACT timestamps in HH:MM:SS,mmm format matching the SRT
+- Each clip must use 4-8 different timestamp segments (more segments = better retention)
+- Each segment must be from DIFFERENT parts of the video (at least 30 seconds apart)
+- Focus on the PRIORITIZED THEMES above
+
+---
+
 📦 OUTPUT FORMAT (repeat for each Franken-Clip):
 
-**Short Title:** [Catchy title with emoji]
-**Estimated Total Duration:** [e.g., 42 seconds]
+**Short Title:** [Viral title with emoji focusing on prioritized themes]
+**Theme Category:** [Which prioritized theme this targets: Money/Vulnerability/Transformation/Industry/Advice/Stereotype-Busting]
+**Estimated Total Duration:** [e.g., 38 seconds]
 **Type:** Franken-Clip
-**Number of Segments:** [e.g., 5 segments]
+**Number of Segments:** [e.g., 6 segments]
 
 **Timestamp Segments:**
-SEGMENT 1: 00:01:23,450 --> 00:01:27,200
-SEGMENT 2: 00:05:15,300 --> 00:05:19,800
-SEGMENT 3: 00:12:03,100 --> 00:12:08,900
-SEGMENT 4: 00:18:45,200 --> 00:18:50,500
-SEGMENT 5: 00:25:12,800 --> 00:25:18,300
+SEGMENT 1: 00:01:23,450 --> 00:01:26,200 [HOOK - setup/question]
+SEGMENT 2: 00:05:15,300 --> 00:05:18,800 [CONTEXT - brief context]
+SEGMENT 3: 00:12:03,100 --> 00:12:06,900 [BUILD - tension/stakes]
+SEGMENT 4: 00:18:45,200 --> 00:18:48,500 [REVEAL - key insight]
+SEGMENT 5: 00:25:12,800 --> 00:25:16,300 [IMPACT - consequence/result]
+SEGMENT 6: 00:32:05,100 --> 00:32:09,400 [PAYOFF - final wisdom/takeaway]
 
 **Script:**
-[Exact dialogue from each segment in order - no modifications]
+[Exact dialogue from each segment in order - no modifications, include every word exactly as transcribed]
 
-**Script:**  
-[Exact dialogue from each segment in order. Dialogue must flow like natural speech. Do not rewrite or combine non-matching tones.]
-
-**Rationale for Virality:**  
-[Explain why this clip works — emotionally powerful arc, high relatability, truth bomb, surprising advice, payoff quote, etc.]
+**Viral Strategy:**
+[Explain why this specific combination of moments creates maximum retention and targets the chosen theme. Describe the narrative arc and emotional journey.]
 
 ---
 
-⚠️ FINAL RULES:
-- ✅ Do NOT include direct clips (contiguous timestamps).
-- ✅ Do NOT fabricate dialogue or paraphrase — use exact lines.
-- ✅ DO stitch only if the narrative sounds natural when spoken.
-- ✅ DO discard any idea that doesn’t follow the full viral arc.
-- ✅ DO prefer emotionally clear or surprising Franken-Clips over superficial or vague ones.
+🎯 ADVANCED FRANKEN-CLIP TECHNIQUES:
+1. **Question-Answer Separation**: Take a question from one timestamp, jump to the answer 20+ minutes later
+2. **Before-After Jumps**: Show the problem early, jump to the solution much later
+3. **Contradiction Reveals**: Find seemingly contradictory statements that actually reveal deeper truth
+4. **Emotion Escalation**: Start calm, jump to emotional peaks, land on wisdom
+5. **Secret-Reveal Pattern**: Tease something big, skip buildup, jump straight to the reveal
 
 ---
 
-ONLY return Franken-Clips that are **story-worthy, emotionally resonant, and coherent when played aloud**. If no good Franken-Clip can be made, return nothing.
+🛑 CRITICAL REQUIREMENTS:
+- MINIMUM 4 segments per Franken-Clip
+- MAXIMUM 8 segments per Franken-Clip  
+- Each segment must be 2-8 seconds (leverage the detailed SRT timing)
+- Focus on PRIORITIZED THEMES for maximum viral potential
+- Segments must create a compelling narrative arc across time jumps
+- Total duration: 25-50 seconds
 
-
-Generate ONLY Franken-Clips following this exact format.
+Generate ONLY Franken-Clips that target the prioritized themes and use precise timestamp segments.
 """
 
 # ---
@@ -150,39 +154,47 @@ def parse_ai_output(text: str) -> list:
             title_match = re.search(r'^(.*?)(?:\n|\*\*)', section, re.MULTILINE)
             title = title_match.group(1).strip() if title_match else f"Untitled Franken-Clip {i}"
             
+            # Extract theme category
+            theme_match = re.search(r'\*\*Theme Category:\*\*\s*(.*?)(?:\n|\*\*)', section)
+            theme_category = theme_match.group(1).strip() if theme_match else "General"
+            
             # Extract number of segments
             segments_match = re.search(r'\*\*Number of Segments:\*\*\s*(.*?)(?:\n|\*\*)', section)
             num_segments = segments_match.group(1).strip() if segments_match else "Unknown"
 
-            rationale_match = re.search(r'\*\*Rationale:\*\*(.*?)(?:\n\*\*|$)', section, re.DOTALL)
-            rationale = rationale_match.group(1).strip() if rationale_match else "No rationale provided."
+            # Extract viral strategy instead of rationale
+            strategy_match = re.search(r'\*\*Viral Strategy:\*\*(.*?)(?:\n\*\*|$)', section, re.DOTALL)
+            viral_strategy = strategy_match.group(1).strip() if strategy_match else "No strategy provided."
 
-            script_match = re.search(r'\*\*Script:\*\*(.*?)(?=\*\*Rationale:\*\*)', section, re.DOTALL)
+            script_match = re.search(r'\*\*Script:\*\*(.*?)(?=\*\*Viral Strategy:\*\*)', section, re.DOTALL)
             script = script_match.group(1).strip() if script_match else "Script not found."
 
-            # Extract ALL individual timestamp segments
+            # Extract ALL individual timestamp segments with labels
             timestamp_text_match = re.search(r'\*\*Timestamp Segments:\*\*(.*?)(?=\*\*Script:\*\*)', section, re.DOTALL)
             timestamps = []
             if timestamp_text_match:
                 timestamp_text = timestamp_text_match.group(1)
-                # Find all SEGMENT patterns
-                segment_matches = re.findall(r'SEGMENT\s+\d+:\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})', timestamp_text)
-                for start_str, end_str in segment_matches:
+                # Find all SEGMENT patterns with optional labels
+                segment_matches = re.findall(r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})(?:\s*\[(.*?)\])?', timestamp_text)
+                for segment_num, start_str, end_str, label in segment_matches:
                     start_sec = parse_srt_timestamp(start_str)
                     end_sec = parse_srt_timestamp(end_str)
                     timestamps.append({
+                        "segment_num": int(segment_num),
                         "start_str": start_str, 
                         "end_str": end_str, 
                         "start_sec": start_sec, 
-                        "end_sec": end_sec
+                        "end_sec": end_sec,
+                        "label": label.strip() if label else f"Segment {segment_num}"
                     })
 
-            if timestamps and len(timestamps) >= 3:  # Must have at least 3 segments for Franken-Clips
+            if timestamps and len(timestamps) >= 4:  # Must have at least 4 segments for enhanced Franken-Clips
                 clips.append({
                     "title": title, 
                     "type": "Franken-Clip", 
+                    "theme_category": theme_category,
                     "num_segments": len(timestamps),
-                    "rationale": rationale,
+                    "viral_strategy": viral_strategy,
                     "script": script, 
                     "timestamps": timestamps
                 })
@@ -227,30 +239,32 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
             subclips = []
             valid_segments = []
             
-            # Process each timestamp segment
+            # Process each timestamp segment with enhanced details
             for j, ts in enumerate(clip_data["timestamps"]):
                 start_time, end_time = ts['start_sec'], ts['end_sec']
                 segment_duration = end_time - start_time
+                segment_label = ts.get('label', f"Segment {ts.get('segment_num', j+1)}")
                 
                 if start_time < video_duration and end_time <= video_duration:
                     subclip = source_video.subclip(start_time, end_time)
                     subclips.append(subclip)
                     valid_segments.append({
-                        "segment_num": j + 1,
+                        "segment_num": ts.get('segment_num', j + 1),
                         "start": ts['start_str'],
                         "end": ts['end_str'],
-                        "duration": segment_duration
+                        "duration": segment_duration,
+                        "label": segment_label
                     })
-                    st.info(f"  ✅ Segment {j+1}: {ts['start_str']} → {ts['end_str']} ({segment_duration:.1f}s)")
+                    st.info(f"  ✅ {segment_label}: {ts['start_str']} → {ts['end_str']} ({segment_duration:.1f}s)")
                 else:
-                    st.warning(f"  ⚠️ Segment {j+1}: {ts['start_str']} → {ts['end_str']} is out of bounds. Skipping.")
+                    st.warning(f"  ⚠️ {segment_label}: {ts['start_str']} → {ts['end_str']} is out of bounds. Skipping.")
             
             if not subclips:
                 st.error(f"❌ No valid segments for Franken-Clip '{clip_data['title']}'. Skipping.")
                 continue
             
-            if len(subclips) < 3:
-                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Franken-Clips need at least 3 segments.")
+            if len(subclips) < 4:
+                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Enhanced Franken-Clips work best with 4+ segments."
 
             # Calculate total duration
             total_duration = sum(seg["duration"] for seg in valid_segments)
@@ -277,9 +291,10 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 "path": output_filepath,
                 "title": clip_data['title'],
                 "type": "Franken-Clip",
+                "theme_category": clip_data.get('theme_category', 'General'),
                 "num_segments": len(valid_segments),
                 "total_duration": total_duration,
-                "rationale": clip_data['rationale'],
+                "viral_strategy": clip_data.get('viral_strategy', 'No strategy provided'),
                 "script": clip_data['script'],
                 "timestamps": clip_data['timestamps'],  # Original timestamps
                 "valid_segments": valid_segments  # Processed segments with details
@@ -365,13 +380,15 @@ def main():
         st.markdown("---")
         st.header("🎯 Franken-Clip Analysis Results")
         for i, clip in enumerate(clips_data, 1):
-            with st.expander(f"📱 Franken-Clip {i}: {clip['title']}"):
+            with st.expander(f"📱 Franken-Clip {i}: {clip['title']} | 🎯 {clip.get('theme_category', 'General')}"):
+                st.markdown(f"**Theme:** {clip.get('theme_category', 'General')}")
                 st.markdown(f"**Segments:** {clip['num_segments']} parts")
                 st.markdown("**Timestamp Segments:**")
-                for j, ts in enumerate(clip['timestamps'], 1):
+                for ts in clip['timestamps']:
                     duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
-                    st.markdown(f"  {j}. `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
-                st.markdown(f"**Strategy:** {clip['rationale']}")
+                    label = ts.get('label', f"Segment {ts.get('segment_num', 'X')}")
+                    st.markdown(f"  • `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s) - *{label}*")
+                st.markdown(f"**Strategy:** {clip.get('viral_strategy', clip.get('rationale', 'No strategy provided'))}")
         
         # Proceed directly to generation without asking permission
         st.markdown("---")
@@ -413,33 +430,35 @@ def main():
                     
                     with col_info:
                         st.metric("Type", "🧩 Franken-Clip")
+                        st.metric("Theme", f"🎯 {clip.get('theme_category', 'General')}")
                         st.metric("Segments Used", f"{clip['num_segments']} parts")
                         st.metric("Total Duration", f"{clip['total_duration']:.1f}s")
                     
-                    # Detailed segment breakdown
+                    # Enhanced segment breakdown with labels
                     st.markdown("### 📊 Segment Breakdown")
                     segment_cols = st.columns(min(len(clip['valid_segments']), 3))
                     for i, segment in enumerate(clip['valid_segments']):
                         col_idx = i % len(segment_cols)
                         with segment_cols[col_idx]:
-                            st.markdown(f"**Segment {segment['segment_num']}**")
+                            st.markdown(f"**{segment.get('label', f'Segment {segment['segment_num']}')}**")
                             st.code(f"{segment['start']} → {segment['end']}")
                             st.caption(f"{segment['duration']:.1f} seconds")
                     
                     # Additional details in expanders
                     col1, col2 = st.columns(2)
                     with col1:
-                        with st.expander("💡 Strategy & Rationale"):
-                            st.info(clip['rationale'])
+                        with st.expander("🎯 Viral Strategy"):
+                            st.info(clip.get('viral_strategy', 'No strategy provided'))
                     with col2:
                         with st.expander("📜 Full Script"):
                             st.text_area("", clip['script'], height=100, key=f"script_{new_path}")
                     
-                    # Complete timestamp listing
+                    # Complete timestamp listing with labels
                     with st.expander("⏰ All Timestamp Segments Used"):
-                        for i, ts in enumerate(clip['timestamps'], 1):
+                        for ts in clip['timestamps']:
                             duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
-                            st.markdown(f"**Segment {i}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
+                            label = ts.get('label', f"Segment {ts.get('segment_num', 'X')}")
+                            st.markdown(f"**{label}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
                     
                     st.markdown("---")
 
@@ -475,35 +494,37 @@ def main():
                 
                 with col_info:
                     st.metric("Type", "🧩 Franken-Clip")
+                    st.metric("Theme", f"🎯 {clip.get('theme_category', 'General')}")
                     st.metric("Segments", f"{clip.get('num_segments', 'Unknown')} parts")
                     if 'total_duration' in clip:
                         st.metric("Duration", f"{clip['total_duration']:.1f}s")
                 
-                # Segment breakdown
+                # Enhanced segment breakdown with labels
                 if 'valid_segments' in clip:
                     st.markdown("### 📊 Segment Breakdown")
                     segment_cols = st.columns(min(len(clip['valid_segments']), 3))
                     for i, segment in enumerate(clip['valid_segments']):
                         col_idx = i % len(segment_cols)
                         with segment_cols[col_idx]:
-                            st.markdown(f"**Segment {segment['segment_num']}**")
+                            st.markdown(f"**{segment.get('label', f'Segment {segment['segment_num']}')}**")
                             st.code(f"{segment['start']} → {segment['end']}")
                             st.caption(f"{segment['duration']:.1f} seconds")
                 
                 # Details in expanders
                 col1, col2 = st.columns(2)
                 with col1:
-                    with st.expander("💡 Strategy & Rationale"):
-                        st.info(clip['rationale'])
+                    with st.expander("🎯 Viral Strategy"):
+                        st.info(clip.get('viral_strategy', clip.get('rationale', 'No strategy provided')))
                 with col2:
                     with st.expander("📜 Full Script"):
                         st.text_area("", clip['script'], height=100, key=f"script_replay_{clip['path']}")
                 
-                # Complete timestamp listing
+                # Complete timestamp listing with labels
                 with st.expander("⏰ All Timestamp Segments Used"):
-                    for i, ts in enumerate(clip['timestamps'], 1):
+                    for ts in clip['timestamps']:
                         duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
-                        st.markdown(f"**Segment {i}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
+                        label = ts.get('label', f"Segment {ts.get('segment_num', 'X')}")
+                        st.markdown(f"**{label}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
                 
                 st.markdown("---")
 
