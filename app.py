@@ -54,21 +54,23 @@ Prioritize clips built around:
 
 ---
 
-📦 OUTPUT FORMAT:
+📦 OUTPUT FORMAT (repeat for each Franken-Clip):
 
-Repeat the format below for each Franken-Clip:
-
-**Potential Short Title:** [Engaging, YouTube-style title with emotion or surprise]  
-**Estimated Duration:** [e.g., 45 seconds]  
+**Short Title:** [Catchy title with emoji]
+**Estimated Total Duration:** [e.g., 42 seconds]
 **Type:** Franken-Clip
+**Number of Segments:** [e.g., 5 segments]
 
-**Transcript for Editor:**
-| Timestamp | Speaker | Dialogue |
-|----------|---------|----------|
-| [hh:mm:ss,ms --> hh:mm:ss,ms] | [Name] | [Hook] |
-| ... | ... | [Context or Bridge] |
-| ... | ... | [Insight / Payoff] |
-| ... | ... | [Takeaway] |
+**Timestamp Segments:**
+SEGMENT 1: 00:01:23,450 --> 00:01:27,200
+SEGMENT 2: 00:05:15,300 --> 00:05:19,800
+SEGMENT 3: 00:12:03,100 --> 00:12:08,900
+SEGMENT 4: 00:18:45,200 --> 00:18:50,500
+SEGMENT 5: 00:25:12,800 --> 00:25:18,300
+
+**Script:**
+[Exact dialogue from each segment in order - no modifications]
+
 
 **Rationale for Virality:**  
 [Explain why this short works: e.g., combines emotional vulnerability with inspirational message, strong hook, satisfying resolution, shocking contrast, hidden truth, or powerful quote.]
