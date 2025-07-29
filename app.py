@@ -27,7 +27,7 @@ Create FRANKEN-CLIPS by stitching together NON-CONTIGUOUS segments from differen
 - 💰 **Money & Career** — salaries, struggle, financial risks
 - 💥 **Vulnerability** — fear, failure, doubt  
 - 🎯 **Transformations** — loss to clarity, confusion to purpose
-- 🎭 **Industry Secrets** — what people don\'t see behind success
+- 🎭 **Industry Secrets** — what people don\\'t see behind success
 - 💡 **Advice** — wisdom, frameworks
 - 🧨 **Breaking Norms** — challenging stereotypes
 
@@ -82,7 +82,7 @@ def get_openai_api_key() -> str:
 
 def parse_srt_timestamp(timestamp_str: str) -> float:
     """Convert SRT timestamp format to total seconds."""
-    timestamp_str = timestamp_str.strip().replace("\',\', ".")
+    timestamp_str = timestamp_str.strip().replace(",", ".")
     try:
         time_parts = timestamp_str.split(":")
         if len(time_parts) == 3:
@@ -101,7 +101,7 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
     Takes start time of first line and end time of last line in each group.
     """
     # Parse individual SRT lines
-    pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\n*$)', re.DOTALL)
+    pattern = re.compile(r"(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\n*$)", re.DOTALL)
     matches = pattern.findall(srt_content)
     
     if not matches:
@@ -133,14 +133,14 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
         if len(current_group) >= 30:
             should_end_group = True
             
-        # End group if there\'s a pause in the next timestamp (gap > 1.5 seconds - increased from 1.0)
+        # End group if there\\'s a pause in the next timestamp (gap > 1.5 seconds - increased from 1.0)
         if i < len(matches) - 1:
             current_end_sec = parse_srt_timestamp(end)
             next_start_sec = parse_srt_timestamp(matches[i+1][1])
             if next_start_sec - current_end_sec > 1.5:
                 should_end_group = True
         
-        # End group if we\'re at the last item
+        # End group if we\\'re at the last item
         if i == len(matches) - 1:
             should_end_group = True
             
@@ -172,7 +172,7 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
     # Convert back to SRT format
     merged_srt = ""
     for seg in merged_segments:
-        merged_srt += f"{seg['index']}\n{seg['start']} --> {seg['end']}\n{seg['text']}\n\n"
+        merged_srt += f"{seg['index']}\\n{seg['start']} --> {seg['end']}\\n{seg['text']}\\n\\n"
     
     st.info(f"📝 Merged {len(matches)} individual lines into {len(merged_segments)} coherent segments")
     return merged_srt
@@ -181,7 +181,7 @@ def read_transcript_file(uploaded_file) -> str:
     try:
         content = uploaded_file.read().decode("utf-8")
         
-        # Check if it\'s word-level SRT (many short segments)
+        # Check if it\\'s word-level SRT (many short segments)
         lines = content.strip().split('\n')
         srt_blocks = content.split('\n\n')
         
@@ -197,7 +197,7 @@ def read_transcript_file(uploaded_file) -> str:
         return ""
 
 def analyze_transcript_with_llm(transcript: str, count: int):
-    user_content = f"{transcript}\n\nPlease generate {count} unique Franken-Clips following the exact format specified."
+    user_content = f"{transcript}\\n\\nPlease generate {count} unique Franken-Clips following the exact format specified."
     
     api_key = get_openai_api_key()
     if not api_key:
@@ -217,23 +217,23 @@ def analyze_transcript_with_llm(transcript: str, count: int):
 
 def parse_ai_output(text: str) -> list:
     clips = []
-    sections = re.split(r'\*\*Short Title:\*\*', text)
+    sections = re.split(r'\\*\\*Short Title:\\*\\*', text)
     
     for i, section in enumerate(sections[1:], 1):
         try:
-            title_match = re.search(r'^(.*?)(?:\n|\*\*)', section, re.MULTILINE)
+            title_match = re.search(r'^(.*?)(?:\\n|\\*\\*)', section, re.MULTILINE)
             title = title_match.group(1).strip() if title_match else f"Untitled Franken-Clip {i}"
             
             # Extract theme category
-            theme_match = re.search(r'\*\*Theme Category:\*\*\s*(.*?)(?:\n|\*\*)', section)
+            theme_match = re.search(r'\\*\\*Theme Category:\\*\\*\\s*(.*?)(?:\\n|\\*\\*)', section)
             theme_category = theme_match.group(1).strip() if theme_match else "General"
             
             # Extract viral strategy
-            strategy_match = re.search(r'\*\*Viral Strategy:\*\*([\s\S]*?)(?:\n\*\*|$)', section, re.DOTALL)
+            strategy_match = re.search(r'\\*\\*Viral Strategy:\\*\\*([\\s\\S]*?)(?:\\n\\*\\*|$)', section, re.DOTALL)
             viral_strategy = strategy_match.group(1).strip() if strategy_match else "No strategy provided."
 
             # Extract selected segments
-            segments_text_match = re.search(r'\*\*Selected Segments:\*\*([\s\S]*?)(?=\*\*Coherence Validation:\*\*)', section, re.DOTALL)
+            segments_text_match = re.search(r'\\*\\*Selected Segments:\\*\\*([\\s\\S]*?)(?=\\*\\*Coherence Validation:\\*\\*)', section, re.DOTALL)
             timestamps = []
             
             if segments_text_match:
@@ -244,7 +244,7 @@ def parse_ai_output(text: str) -> list:
                     line = line.strip()
                     if line.startswith('SEGMENT'):
                         # Parse segment line
-                        segment_match = re.search(r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-\s*(.*?)\s*\[(.*?)\]', line)
+                        segment_match = re.search(r'SEGMENT\\s+(\\d+):\\s*(\\d{2}:\\d{2}:\\d{2},\\d{3})\\s*-->\\s*(\\d{2}:\\d{2}:\\d{2},\\d{3})\\s*-\\s*(.*?)\\s*\\[(.*?)\\]', line)
                         if segment_match:
                             segment_num, start_str, end_str, text, purpose = segment_match.groups()
                             start_sec = parse_srt_timestamp(start_str)
@@ -414,7 +414,7 @@ def main():
         - **Narrative Arc:** Each Franken-Clip aims to tell a mini-story with a Hook, Build, and Payoff.
         - **Thematic Focus:** Clips are centered around specific viral themes (e.g., Money, Vulnerability, Transformation).
         - **Short & Punchy:** Optimized for platforms like YouTube Shorts, TikTok, and Instagram Reels.
-        """) # Closing the multiline string here
+        """)
     
     st.subheader("Upload Transcript (SRT) and Video")
     
