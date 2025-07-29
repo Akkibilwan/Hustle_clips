@@ -11,62 +11,47 @@ import gdown
 from openai import OpenAI
 
 # ---
-# 1. SYSTEM PROMPT - UPDATED WITH DYNAMIC THEME PLACEHOLDER
+# 1. SYSTEM PROMPT - UNCHANGED
 # ---
 SYSTEM_PROMPT = """
 You are an expert viral video editor specializing in "Franken-Clips". Your task is to create a compelling 25-60 second story by stitching together non-contiguous clips based on user-selected themes.
-
 **CRITICAL INSTRUCTION: THE INPUT FORMAT**
 You will receive a highly granular, 'word-level' SRT transcript. Each numbered line may only be a word or a short phrase. Your primary task is to group these small lines together to form longer, meaningful "Logical Segments".
-
 ---
-
 **🔥 YOUR 3-STEP EDITING PROCESS:**
-
 **STEP 1: Identify a "Logical Segment"**
 - A "Logical Segment" is a complete sentence or a powerful idea that aligns with the user's chosen themes.
 - To create one, you must group together several consecutive granular SRT lines.
-
 **STEP 2: Determine the Precise Timestamp for your Logical Segment**
 - Use the START time of the FIRST granular line in your group.
 - Use the END time of the LAST granular line in your group.
 - Example: If you group lines 10, 11, and 12, your final timestamp is `[START_TIME_of_10] --> [END_TIME_of_12]`.
-
 **STEP 3: Build the Franken-Clip**
 - Create 3-4 "Logical Segments" from DIFFERENT parts of the transcript (2+ minutes apart).
 - Arrange them into a **HOOK → BUILD → PAYOFF** narrative structure.
 - **You MUST prioritize the user-selected themes provided in the prompt.**
-
 ---
-
 📦 STRICT OUTPUT FORMAT (Use the combined timestamps you created):
-
 **Short Title:** [🚀 Viral Title with an Emoji]
 **Theme Category:** [Match one of the user-selected themes]
 **Number of Segments:** [3 or 4]
-
 **Selected Segments:**
 SEGMENT 1: 00:01:23,450 --> 00:01:28,100 - The hook, created by merging lines 25-29. [HOOK]
 SEGMENT 2: 00:08:45,100 --> 00:08:52,500 - The build, created from lines 150-155. [BUILD]
 SEGMENT 3: 00:25:10,300 --> 00:25:19,900 - The payoff, created from lines 412-418. [PAYOFF]
-
 **Coherence Validation:**
 - Strong hook: YES - It creates powerful curiosity.
 - Logical flow: YES - The story builds perfectly.
 - Satisfying payoff: YES - It delivers a strong emotional or intellectual reward.
 - APPROVED: YES
-
 **Viral Strategy:**
 [Explain why grouping these specific phrases creates a powerful narrative that aligns with the chosen theme.]
-
 ---
-
 🛑 REQUIREMENTS:
 - **You MUST group granular lines** and use the start-time-of-first and end-time-of-last for your timestamps.
 - **You MUST focus on the user-selected themes.**
 - Ensure the final combined duration is 25-60 seconds.
 - You MUST include "APPROVED: YES" in your validation.
-
 Now, analyze the provided granular transcript and generate unique Franken-Clips.
 """
 
@@ -75,11 +60,9 @@ Now, analyze the provided granular transcript and generate unique Franken-Clips.
 # ---
 
 def get_openai_api_key() -> str:
-    """Gets the OpenAI API key from Streamlit secrets."""
     return st.secrets.get("openai", {}).get("api_key", "")
 
 def fetch_openai_models(api_key: str) -> list[str]:
-    """Fetches available chat models from the OpenAI API."""
     default_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
     if not api_key:
         st.warning("OpenAI API key not found. Using default model list.")
@@ -96,7 +79,6 @@ def fetch_openai_models(api_key: str) -> list[str]:
         return default_models
 
 def parse_srt_timestamp(timestamp_str: str) -> float:
-    """Convert SRT timestamp format to total seconds."""
     timestamp_str = timestamp_str.strip().replace(',', '.')
     try:
         parts = timestamp_str.split(':')
@@ -112,7 +94,6 @@ def parse_srt_timestamp(timestamp_str: str) -> float:
         return 0.0
 
 def read_transcript_file(uploaded_file) -> str:
-    """Reads the raw transcript file content."""
     try:
         content = uploaded_file.read().decode("utf-8")
         st.info("✅ Granular transcript loaded.")
@@ -121,15 +102,9 @@ def read_transcript_file(uploaded_file) -> str:
         st.error(f"Error reading transcript file: {e}")
         return ""
 
-# MODIFIED: Accepts 'model' and 'selected_themes' parameters
 def analyze_transcript_with_llm(transcript: str, count: int, model: str, selected_themes: list[str]):
-    """Analyzes the transcript with the specified AI model and themes."""
-    
-    # Dynamically insert the selected themes into the user prompt
     theme_prompt_part = f"Please prioritize finding clips that match the following user-selected themes: {', '.join(selected_themes)}."
-    
     user_content = f"{theme_prompt_part}\n\nHere is the granular, word-level transcript:\n\n{transcript}\n\nPlease generate {count} unique Franken-Clips by grouping these lines and following all instructions."
-    
     api_key = get_openai_api_key()
     if not api_key:
         st.error("OpenAI API key not set in Streamlit secrets.")
@@ -231,9 +206,18 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 start_time, end_time = ts['start_sec'], ts['end_sec']
                 if start_time < video_duration and end_time <= video_duration and start_time < end_time:
                     subclips.append(source_video.subclip(start_time, end_time))
-                    valid_segments.append(ts)
+                    
+                    # *** THIS IS THE FIX ***
+                    # Explicitly create the dictionary for valid_segments to ensure data consistency.
+                    # This prevents KeyErrors during the final display loop.
+                    valid_segments.append({
+                        'label': ts.get('label', 'SEG'),
+                        'start_str': ts.get('start_str', '00:00:00,000'),
+                        'end_str': ts.get('end_str', '00:00:00,000'),
+                        'duration': ts.get('duration', 0.0)
+                    })
                 else:
-                    st.warning(f"  ⚠️ Skipping segment {ts['label']} (out of bounds).")
+                    st.warning(f"  ⚠️ Skipping segment {ts.get('label', 'Unknown')} (out of bounds).")
             
             if not subclips:
                 st.error(f"❌ No valid segments for '{clip_data['title']}'. Skipping.")
@@ -275,7 +259,6 @@ def main():
     if 'results' not in st.session_state:
         st.session_state.results = []
 
-    # Define the list of themes
     THEMES = [
         "Money, fame, or industry truths",
         "Firsts and breakthroughs (first paycheck, big break, first failure)",
@@ -285,7 +268,6 @@ def main():
         "Breaking stereotypes or taboos"
     ]
 
-    # MODIFIED: Sidebar now includes theme selection
     with st.sidebar:
         st.header("⚙️ Configuration")
         
@@ -297,12 +279,11 @@ def main():
         st.subheader("2. Generation Settings")
         clips_count = st.slider("Number of Clips to Generate:", 1, 5, 2)
         
-        # NEW: Multi-select for themes
         st.subheader("3. Creative Direction")
         selected_themes = st.multiselect(
             "Select Themes to Prioritize:",
             options=THEMES,
-            default=[THEMES[0], THEMES[2]] # Pre-select a couple of popular themes
+            default=[THEMES[0], THEMES[2]]
         )
 
         st.subheader("4. AI Settings")
@@ -318,8 +299,8 @@ def main():
         with st.expander("ℹ️ How It Works"):
             st.markdown("""
             - **1. Select Themes:** You choose the topics you want to focus on.
-            - **2. AI Analysis:** The AI reads the entire transcript, specifically looking for phrases and sentences that match your chosen themes.
-            - **3. Precision Cuts:** It groups the best phrases, calculates their exact timestamps, and cuts only those segments.
+            - **2. AI Analysis:** The AI reads the transcript, looking for phrases that match your themes.
+            - **3. Precision Cuts:** It groups the best phrases and calculates their exact timestamps.
             - **4. Narrative Stitch:** It assembles these thematic cuts into a compelling story.
             """)
 
@@ -337,7 +318,6 @@ def main():
                 if not transcript_content: raise ValueError("Transcript is empty.")
                 
                 status.update(label=f"Step 2/5: AI analyzing for themes using {selected_model}...")
-                # MODIFIED: Pass selected themes to the analysis function
                 ai_response = analyze_transcript_with_llm(transcript_content, clips_count, selected_model, selected_themes)
                 if not ai_response: raise ValueError("AI analysis failed.")
                 
@@ -395,6 +375,7 @@ def main():
                 st.info(clip.get('viral_strategy', 'Not provided.'))
                 st.markdown("**Precision Cuts Made:**")
                 for seg in clip.get('valid_segments', []):
+                    # This line is now safe because 'valid_segments' is guaranteed to have the correct keys
                     st.markdown(f"- **{seg['label']}**: `{seg['start_str']} → {seg['end_str']}` ({seg['duration']:.1f}s)")
                 st.markdown("**Final Script:**")
                 st.text_area("Script", clip.get('script', ''), height=100, key=f"script_{i}", disabled=True)
