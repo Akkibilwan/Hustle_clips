@@ -1,61 +1,10 @@
-if results["type"] == "generator":
-            st.header("✅ Your Generated Franken-Clips")
-            if not results["data"]:
-                st.warning("No Franken-Clips were successfully generated.")
-            
-            for clip in results["data"]:
-                st.subheader(f"🎬 {clip['title']}")
-                
-                # Main video and info
-                col_video, col_info = st.columns([3, 2])
-                with col_video:
-                    if os.path.exists(clip['path']):
-                        st.video(clip['path'])
-                        with open(clip['path'], "rb") as file:
-                            st.download_button("⬗️ Download Franken-Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{clip['path']}")
-                    else:
-                        st.error("Franken-Clip file not found.")
-                
-                with col_info:
-                    st.metric("Type", "🧩 Franken-Clip")
-                    st.metric("Segments", f"{clip.get('num_segments', 'Unknown')} parts")
-                    if 'total_duration' in clip:
-                        st.metric("Duration", f"{clip['total_duration']:.1f}s")
-                
-                # Segment breakdown
-                if 'valid_segments' in clip:
-                    st.markdown("### 📊 Segment Breakdown")
-                    segment_cols = st.columns(min(len(clip['valid_segments']), 3))
-                    for i, segment in enumerate(clip['valid_segments']):
-                        col_idx = i % len(segment_cols)
-                        with segment_cols[col_idx]:
-                            st.markdown(f"**Segment {segment['segment_num']}**")
-                            st.code(f"{segment['start']} → {segment['end']}")
-                            st.caption(f"{segment['duration']:.1f} seconds")
-                
-                # Details in expanders
-                col1, col2 = st.columns(2)
-                with col1:
-                    with st.expander("💡 Strategy & Rationale"):
-                        st.info(clip['rationale'])
-                with col2:
-                    with st.expander("📜 Full Script"):
-                        st.text_area("", clip['script'], height=100, key=f"script_replay_{clip['path']}")
-                
-                # Complete timestamp listing
-                with st.expander("⏰ All Timestamp Segments Used"):
-                    for i, ts in enumerate(clip['timestamps'], 1):
-                        duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
-                        st.markdown(f"**Segment {i}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
-                
-                st.markdown("---")# Exact Copy of Working Code Structure - SRT ClipStitcher
+# Franken-Clip Generator - Extract Non-Contiguous Viral Segments
 import os
 import re
 import tempfile
 import streamlit as st
 import traceback
 import shutil
-import gc
 
 # All necessary libraries exactly like working code
 from moviepy.editor import VideoFileClip, concatenate_videoclips
@@ -63,7 +12,7 @@ import gdown
 from openai import OpenAI
 
 # ---
-# 1. SYSTEM PROMPT (Using working code approach)
+# 1. SYSTEM PROMPT - Franken-Clips Only
 # ---
 SYSTEM_PROMPT = """
 You are an expert YouTube Shorts strategist specializing in FRANKEN-CLIPS.
@@ -124,7 +73,7 @@ Generate ONLY Franken-Clips following this exact format.
 """
 
 # ---
-# 2. HELPER FUNCTIONS (Exact copy from working code)
+# 2. HELPER FUNCTIONS
 # ---
 
 def get_openai_api_key() -> str:
@@ -153,7 +102,7 @@ def parse_srt_timestamp(timestamp_str: str) -> float:
         return 0.0
 
 def analyze_transcript_with_llm(transcript: str, count: int):
-    user_content = f"{transcript}\n\nPlease generate {count} unique potential shorts following the exact format specified."
+    user_content = f"{transcript}\n\nPlease generate {count} unique Franken-Clips following the exact format specified."
     
     api_key = get_openai_api_key()
     if not api_key:
@@ -328,11 +277,11 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
     source_video.close()
 
 # ---
-# 3. STREAMLIT APP - EXACT STRUCTURE FROM WORKING CODE
+# 3. STREAMLIT APP
 # ---
 
 def main():
-    st.set_page_config(page_title="SRT ClipStitcher", layout="wide", page_icon="🎬")
+    st.set_page_config(page_title="Franken-Clip Generator", layout="wide", page_icon="🧩")
     
     st.title("🎬 Franken-Clip Generator")
     st.markdown("**Create viral Franken-Clips by stitching together non-contiguous segments from your videos.**")
@@ -351,11 +300,11 @@ def main():
         **Example:** Hook from 2:15 → Jump to 15:30 → Jump to 28:45 → End at 35:20
         """)
 
-    # Initialize session state - EXACT COPY
+    # Initialize session state
     if 'results' not in st.session_state:
         st.session_state.results = None
 
-    # Sidebar Configuration - SIMPLIFIED LIKE WORKING CODE
+    # Sidebar Configuration
     with st.sidebar:
         st.header("⚙️ Configuration")
         
@@ -404,49 +353,113 @@ def main():
                 st.markdown(f"**Strategy:** {clip['rationale']}")
         
         if st.button("✅ Proceed with Franken-Clip Generation", type="secondary"):
-            # --- EXACT COPY OF WORKING CODE LOGIC ---
+            # --- Process the Franken-Clips ---
             st.session_state.results = {"type": "generator", "data": []}
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                with st.spinner("⬇️ Downloading video from Google Drive..."):
-                    video_path = download_drive_file(video_url, temp_dir)
-                st.success("✅ Video downloaded and verified.")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                try:
+                    with st.spinner("⬇️ Downloading video from Google Drive..."):
+                        video_path = download_drive_file(video_url, temp_dir)
+                    st.success("✅ Video downloaded and verified.")
 
-                st.markdown("---")
-                st.header("🎬 Your Generated Franken-Clips (Loading...)")
-                
-                persistent_dir = "generated_clips"
-                if not os.path.exists(persistent_dir):
-                    os.makedirs(persistent_dir)
-                for f in os.listdir(persistent_dir):
-                    os.remove(os.path.join(persistent_dir, f))
-                
-                # --- Progressive Franken-Clip Generation ---
-                final_clips = []
-                clip_generator = generate_clips_progressively(video_path, clips_data, temp_dir)
-                for clip in clip_generator:
-                    # Move file and display immediately
-                    new_path = os.path.join(persistent_dir, os.path.basename(clip['path']))
-                    shutil.move(clip['path'], new_path)
-                    clip['path'] = new_path
-                    final_clips.append(clip)
+                    st.markdown("---")
+                    st.header("🎬 Your Generated Franken-Clips (Loading...)")
                     
-                    # Display the Franken-Clip that was just generated
-                    st.subheader(f"🎬 {clip['title']}")
+                    persistent_dir = "generated_clips"
+                    if not os.path.exists(persistent_dir):
+                        os.makedirs(persistent_dir)
+                    for f in os.listdir(persistent_dir):
+                        os.remove(os.path.join(persistent_dir, f))
                     
-                    # Main video display
-                    col_video, col_info = st.columns([3, 2])
-                    with col_video:
+                    # --- Progressive Franken-Clip Generation ---
+                    final_clips = []
+                    clip_generator = generate_clips_progressively(video_path, clips_data, temp_dir)
+                    for clip in clip_generator:
+                        # Move file and display immediately
+                        new_path = os.path.join(persistent_dir, os.path.basename(clip['path']))
+                        shutil.move(clip['path'], new_path)
+                        clip['path'] = new_path
+                        final_clips.append(clip)
+                        
+                        # Display the Franken-Clip that was just generated
+                        st.subheader(f"🎬 {clip['title']}")
+                        
+                        # Main video display
+                        col_video, col_info = st.columns([3, 2])
+                        with col_video:
+                            st.video(clip['path'])
+                            with open(clip['path'], "rb") as file:
+                                st.download_button("⬇️ Download Franken-Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{new_path}")
+                        
+                        with col_info:
+                            st.metric("Type", "🧩 Franken-Clip")
+                            st.metric("Segments Used", f"{clip['num_segments']} parts")
+                            st.metric("Total Duration", f"{clip['total_duration']:.1f}s")
+                        
+                        # Detailed segment breakdown
+                        st.markdown("### 📊 Segment Breakdown")
+                        segment_cols = st.columns(min(len(clip['valid_segments']), 3))
+                        for i, segment in enumerate(clip['valid_segments']):
+                            col_idx = i % len(segment_cols)
+                            with segment_cols[col_idx]:
+                                st.markdown(f"**Segment {segment['segment_num']}**")
+                                st.code(f"{segment['start']} → {segment['end']}")
+                                st.caption(f"{segment['duration']:.1f} seconds")
+                        
+                        # Additional details in expanders
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            with st.expander("💡 Strategy & Rationale"):
+                                st.info(clip['rationale'])
+                        with col2:
+                            with st.expander("📜 Full Script"):
+                                st.text_area("", clip['script'], height=100, key=f"script_{new_path}")
+                        
+                        # Complete timestamp listing
+                        with st.expander("⏰ All Timestamp Segments Used"):
+                            for i, ts in enumerate(clip['timestamps'], 1):
+                                duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
+                                st.markdown(f"**Segment {i}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
+                        
+                        st.markdown("---")
+
+                    st.session_state.results["data"] = final_clips # Save final list
+                    st.success(f"🎉 All {len(final_clips)} Franken-Clips generated successfully!")
+
+                except Exception as e:
+                    st.error(f"An error occurred during Franken-Clip generation: {e}")
+                    st.code(traceback.format_exc())
+
+    # Display results from session state if they exist (for reruns)
+    elif st.session_state.results:
+        results = st.session_state.results
+        st.markdown("---")
+        
+        if results["type"] == "generator":
+            st.header("✅ Your Generated Franken-Clips")
+            if not results["data"]:
+                st.warning("No Franken-Clips were successfully generated.")
+            
+            for clip in results["data"]:
+                st.subheader(f"🎬 {clip['title']}")
+                
+                # Main video and info
+                col_video, col_info = st.columns([3, 2])
+                with col_video:
+                    if os.path.exists(clip['path']):
                         st.video(clip['path'])
                         with open(clip['path'], "rb") as file:
-                            st.download_button("⬇️ Download Franken-Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{new_path}")
-                    
-                    with col_info:
-                        st.metric("Type", "🧩 Franken-Clip")
-                        st.metric("Segments Used", f"{clip['num_segments']} parts")
-                        st.metric("Total Duration", f"{clip['total_duration']:.1f}s")
-                    
-                    # Detailed segment breakdown
+                            st.download_button("⬇️ Download Franken-Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{clip['path']}")
+                    else:
+                        st.error("Franken-Clip file not found.")
+                
+                with col_info:
+                    st.metric("Type", "🧩 Franken-Clip")
+                    st.metric("Segments", f"{clip.get('num_segments', 'Unknown')} parts")
+                    if 'total_duration' in clip:
+                        st.metric("Duration", f"{clip['total_duration']:.1f}s")
+                
+                # Segment breakdown
+                if 'valid_segments' in clip:
                     st.markdown("### 📊 Segment Breakdown")
                     segment_cols = st.columns(min(len(clip['valid_segments']), 3))
                     for i, segment in enumerate(clip['valid_segments']):
@@ -455,59 +468,22 @@ def main():
                             st.markdown(f"**Segment {segment['segment_num']}**")
                             st.code(f"{segment['start']} → {segment['end']}")
                             st.caption(f"{segment['duration']:.1f} seconds")
-                    
-                    # Additional details in expanders
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        with st.expander("💡 Strategy & Rationale"):
-                            st.info(clip['rationale'])
-                    with col2:
-                        with st.expander("📜 Full Script"):
-                            st.text_area("", clip['script'], height=100, key=f"script_{new_path}")
-                    
-                    # Complete timestamp listing
-                    with st.expander("⏰ All Timestamp Segments Used"):
-                        for i, ts in enumerate(clip['timestamps'], 1):
-                            duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
-                            st.markdown(f"**Segment {i}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
-                    
-                    st.markdown("---")
-
-                st.session_state.results["data"] = final_clips # Save final list
-                st.success(f"🎉 All {len(final_clips)} Franken-Clips generated successfully!")
-
-            except Exception as e:
-                st.error(f"An error occurred during Franken-Clip generation: {e}")
-                st.code(traceback.format_exc())
-
-    # Display results from session state if they exist (for reruns) - EXACT COPY
-    elif st.session_state.results:
-        results = st.session_state.results
-        st.markdown("---")
-        
-        if results["type"] == "generator":
-            st.header("✅ Your Generated Clips")
-            if not results["data"]:
-                st.warning("No clips were successfully generated.")
-            for clip in results["data"]:
-                st.subheader(f"🎬 {clip['title']}")
-                col_video, col_info = st.columns(2)
-                with col_video:
-                    if os.path.exists(clip['path']):
-                        st.video(clip['path'])
-                        with open(clip['path'], "rb") as file:
-                            st.download_button("⬇️ Download Clip", file, file_name=os.path.basename(clip['path']), key=f"dl_{clip['path']}")
-                    else:
-                        st.error("Clip file not found.")
-                with col_info:
-                     st.markdown(f"**Type:** `{clip['type']}`")
-                     with st.expander("💡 Rationale"):
-                         st.info(clip['rationale'])
-                     with st.expander("📜 Script"):
-                         st.text_area("", clip['script'], height=100, key=f"script_{clip['path']}")
-                     with st.expander("⏰ Timestamps Used"):
-                         for ts in clip['timestamps']:
-                             st.code(f"{ts['start_str']} --> {ts['end_str']}")
+                
+                # Details in expanders
+                col1, col2 = st.columns(2)
+                with col1:
+                    with st.expander("💡 Strategy & Rationale"):
+                        st.info(clip['rationale'])
+                with col2:
+                    with st.expander("📜 Full Script"):
+                        st.text_area("", clip['script'], height=100, key=f"script_replay_{clip['path']}")
+                
+                # Complete timestamp listing
+                with st.expander("⏰ All Timestamp Segments Used"):
+                    for i, ts in enumerate(clip['timestamps'], 1):
+                        duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
+                        st.markdown(f"**Segment {i}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
+                
                 st.markdown("---")
 
 if __name__ == "__main__":
