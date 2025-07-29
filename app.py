@@ -12,7 +12,7 @@ import gdown
 from openai import OpenAI
 
 # ---
-# 1. SYSTEM PROMPT - Franken-Clips Only
+# 1. SYSTEM PROMPT - Simplified and Clear
 # ---
 SYSTEM_PROMPT = """
 You are an expert YouTube Shorts strategist specializing in FRANKEN-CLIPS.
@@ -79,6 +79,21 @@ Generate 2-3 Franken-Clips following this format exactly.
 
 def get_openai_api_key() -> str:
     return st.secrets.get("openai", {}).get("api_key", "")
+
+def parse_srt_timestamp(timestamp_str: str) -> float:
+    """Convert SRT timestamp format to total seconds."""
+    timestamp_str = timestamp_str.strip().replace(',', '.')
+    try:
+        time_parts = timestamp_str.split(':')
+        if len(time_parts) == 3:
+            h, m, s_ms = time_parts
+            return int(h) * 3600 + int(m) * 60 + float(s_ms)
+        elif len(time_parts) == 2:
+            m, s_ms = time_parts
+            return int(m) * 60 + float(s_ms)
+        return float(time_parts[0])
+    except Exception:
+        return 0.0
 
 def merge_consecutive_srt_lines(srt_content: str) -> str:
     """
@@ -162,56 +177,6 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
     st.info(f"📝 Merged {len(matches)} individual lines into {len(merged_segments)} coherent segments")
     return merged_srt
 
-def validate_clip_coherence(title: str, segments: list, script_preview: str) -> tuple:
-    """
-    Validate if the selected segments create a coherent, viral-worthy clip.
-    Returns (is_valid: bool, reason: str)
-    """
-    
-    # Check 1: Minimum duration requirements
-    total_duration = sum(seg.get('duration', 0) for seg in segments)
-    if total_duration < 20:
-        return False, f"Total duration {total_duration:.1f}s too short (need 20+ seconds)"
-    
-    if total_duration > 70:
-        return False, f"Total duration {total_duration:.1f}s too long (max 70 seconds)"
-    
-    # Check 2: Individual segment length
-    for i, seg in enumerate(segments, 1):
-        duration = seg.get('duration', 0)
-        if duration < 3:
-            return False, f"Segment {i} too short ({duration:.1f}s) - need 3+ seconds"
-        if duration > 25:
-            return False, f"Segment {i} too long ({duration:.1f}s) - max 25 seconds"
-    
-    # Check 3: Time gaps between segments (should be spread out)
-    if len(segments) >= 2:
-        for i in range(len(segments) - 1):
-            current_end = parse_srt_timestamp(segments[i]['end_str'])
-            next_start = parse_srt_timestamp(segments[i+1]['start_str'])
-            gap = next_start - current_end
-            
-            if gap < 30:  # Less than 30 seconds apart
-                return False, f"Segments {i+1} and {i+2} too close together ({gap:.1f}s gap) - need 30+ seconds"
-    
-    # Check 4: Content quality - look for filler words or incomplete thoughts
-    script_lower = script_preview.lower()
-    filler_ratio = sum(script_lower.count(word) for word in ['um', 'uh', 'like', 'you know']) / len(script_lower.split())
-    
-    if filler_ratio > 0.15:  # More than 15% filler words
-        return False, f"Too many filler words ({filler_ratio:.1%}) - not engaging enough"
-    
-    # Check 5: Has question/answer or setup/payoff structure
-    has_question = any(seg.get('text', '').strip().endswith('?') for seg in segments)
-    has_strong_words = any(word in script_lower for word in [
-        'secret', 'mistake', 'truth', 'reality', 'never', 'always', 'biggest', 'worst', 'best'
-    ])
-    
-    if not (has_question or has_strong_words):
-        return False, "No compelling hook or strong language detected"
-    
-    return True, "✅ Clip passes all coherence checks"
-
 def read_transcript_file(uploaded_file) -> str:
     try:
         content = uploaded_file.read().decode("utf-8")
@@ -230,21 +195,6 @@ def read_transcript_file(uploaded_file) -> str:
     except Exception as e:
         st.error(f"Error reading file: {e}")
         return ""
-
-def parse_srt_timestamp(timestamp_str: str) -> float:
-    """Convert SRT timestamp format to total seconds."""
-    timestamp_str = timestamp_str.strip().replace(',', '.')
-    try:
-        time_parts = timestamp_str.split(':')
-        if len(time_parts) == 3:
-            h, m, s_ms = time_parts
-            return int(h) * 3600 + int(m) * 60 + float(s_ms)
-        elif len(time_parts) == 2:
-            m, s_ms = time_parts
-            return int(m) * 60 + float(s_ms)
-        return float(time_parts[0])
-    except Exception:
-        return 0.0
 
 def analyze_transcript_with_llm(transcript: str, count: int):
     user_content = f"{transcript}\n\nPlease generate {count} unique Franken-Clips following the exact format specified."
@@ -278,203 +228,62 @@ def parse_ai_output(text: str) -> list:
             theme_match = re.search(r'\*\*Theme Category:\*\*\s*(.*?)(?:\n|\*\*)', section)
             theme_category = theme_match.group(1).strip() if theme_match else "General"
             
-            # Extract number of segments
-            segments_match = re.search(r'\*\*Number of Segments:\*\*\s*(.*?)(?:\n|\*\*)', section)
-            num_segments = segments_match.group(1).strip() if segments_match else "3"
-
-            # Extract coherence validation
-            coherence_match = re.search(r'\*\*Coherence Validation:\*\*(.*?)(?=\*\*Viral Strategy:\*\*)', section, re.DOTALL)
-            coherence_validation = coherence_match.group(1).strip() if coherence_match else ""
-
             # Extract viral strategy
             strategy_match = re.search(r'\*\*Viral Strategy:\*\*(.*?)(?:\n\*\*|$)', section, re.DOTALL)
             viral_strategy = strategy_match.group(1).strip() if strategy_match else "No strategy provided."
 
-            # Look for coherence validation with multiple possible formats
-            coherence_patterns = [
-                r'\*\*Coherence Validation:\*\*(.*?)(?=\*\*Viral Strategy:\*\*)',
-                r'\*\*Coherence Check:\*\*(.*?)(?=\*\*Viral Strategy:\*\*)',
-                r'\*\*Validation:\*\*(.*?)(?=\*\*Viral Strategy:\*\*)'
-            ]
-            
-            coherence_validation = ""
-            for pattern in coherence_patterns:
-                match = re.search(pattern, section, re.DOTALL)
-                if match:
-                    coherence_validation = match.group(1).strip()
-                    break
-            
-            if not coherence_validation:
-                coherence_validation = "No validation found"
-                st.info(f"📝 No coherence validation found for '{title}' - will attempt to parse anyway")
-
-            # Extract viral strategy
-            strategy_match = re.search(r'\*\*Viral Strategy:\*\*(.*?)(?:\n\*\*|$)', section, re.DOTALL)
-            viral_strategy = strategy_match.group(1).strip() if strategy_match else "No strategy provided."
-
-            # Extract selected segments with flexible parsing
-            segments_patterns = [
-                r'\*\*Selected Segments:\*\*(.*?)(?=\*\*Coherence)',
-                r'\*\*Timestamp Segments:\*\*(.*?)(?=\*\*Script)',
-                r'\*\*Segments:\*\*(.*?)(?=\*\*Coherence)'
-            ]
-            
-            segments_text = ""
-            for pattern in segments_patterns:
-                match = re.search(pattern, section, re.DOTALL)
-                if match:
-                    segments_text = match.group(1).strip()
-                    break
-            
+            # Extract selected segments
+            segments_text_match = re.search(r'\*\*Selected Segments:\*\*(.*?)(?=\*\*Coherence Validation:\*\*)', section, re.DOTALL)
             timestamps = []
             
-            if segments_text:
-                # Parse segments with multiple possible formats
+            if segments_text_match:
+                segments_text = segments_text_match.group(1)
                 segment_lines = segments_text.strip().split('\n')
                 
                 for line in segment_lines:
                     line = line.strip()
-                    if line and ('SEGMENT' in line or ':' in line):
-                        # Try multiple parsing patterns
-                        patterns = [
-                            r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-\s*(.*?)\s*\[(.*?)\]',
-                            r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*(.*)',
-                            r'(\d+)[:\.]?\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*(.*)'
-                        ]
-                        
-                        for pattern in patterns:
-                            match = re.search(pattern, line)
-                            if match:
-                                groups = match.groups()
-                                if len(groups) >= 3:
-                                    segment_num = groups[0]
-                                    start_str = groups[1].replace('.', ',')
-                                    end_str = groups[2].replace('.', ',')
-                                    text = groups[3] if len(groups) > 3 else f"Segment {segment_num}"
-                                    purpose = groups[4] if len(groups) > 4 else "Content"
-                                    
-                                    start_sec = parse_srt_timestamp(start_str)
-                                    end_sec = parse_srt_timestamp(end_str)
-                                    duration = end_sec - start_sec
-                                    
-                                    timestamps.append({
-                                        "segment_num": int(segment_num),
-                                        "start_str": start_str,
-                                        "end_str": end_str,
-                                        "start_sec": start_sec,
-                                        "end_sec": end_sec,
-                                        "duration": duration,
-                                        "text": text.strip(),
-                                        "label": purpose.strip(),
-                                        "purpose": purpose.strip()
-                                    })
-                                    break
+                    if line.startswith('SEGMENT'):
+                        # Parse segment line
+                        segment_match = re.search(r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-\s*(.*?)\s*\[(.*?)\]', line)
+                        if segment_match:
+                            segment_num, start_str, end_str, text, purpose = segment_match.groups()
+                            start_sec = parse_srt_timestamp(start_str)
+                            end_sec = parse_srt_timestamp(end_str)
+                            duration = end_sec - start_sec
+                            
+                            timestamps.append({
+                                "segment_num": int(segment_num),
+                                "start_str": start_str,
+                                "end_str": end_str,
+                                "start_sec": start_sec,
+                                "end_sec": end_sec,
+                                "duration": duration,
+                                "text": text.strip(),
+                                "label": purpose.strip(),
+                                "purpose": purpose.strip()
+                            })
 
-            # Accept clips with any valid timestamps (relaxed validation)
             if timestamps:
-                st.info(f"📍 Found {len(timestamps)} valid segments for '{title}'")
-                
                 clips.append({
                     "title": title,
                     "type": "Franken-Clip",
                     "theme_category": theme_category,
                     "num_segments": len(timestamps),
-                    "coherence_validation": coherence_validation,
                     "viral_strategy": viral_strategy,
                     "script": ' '.join([t.get('text', '') for t in timestamps]),
-                    "timestamps": timestamps,
-                    "validation_passed": True,
-                    "validation_reason": f"Found {len(timestamps)} segments"
+                    "timestamps": timestamps
                 })
                 st.success(f"✅ Parsed '{title}' with {len(timestamps)} segments")
             else:
                 st.warning(f"⚠️ No valid segments found for '{title}'")
-                    
-        except Exception as e:
-            st.warning(f"Could not parse Franken-Clip section {i}: {e}")
-    
-    return clips
-
-def parse_ai_output_relaxed(text: str) -> list:
-    """
-    Relaxed parsing that accepts clips even if they don't pass all checks.
-    Used as fallback when strict parsing fails.
-    """
-    clips = []
-    sections = re.split(r'\*\*Short Title:\*\*', text)
-    
-    st.info(f"🔍 Found {len(sections)-1} potential clips to parse")
-    
-    for i, section in enumerate(sections[1:], 1):
-        try:
-            title_match = re.search(r'^(.*?)(?:\n|\*\*)', section, re.MULTILINE)
-            title = title_match.group(1).strip() if title_match else f"Franken-Clip {i}"
-            
-            # Extract theme category
-            theme_match = re.search(r'\*\*Theme Category:\*\*\s*(.*?)(?:\n|\*\*)', section)
-            theme_category = theme_match.group(1).strip() if theme_match else "General"
-            
-            # Look for ANY timestamp pattern
-            timestamp_patterns = [
-                r'(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})',  # Standard format
-                r'(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})',  # Dot format
-            ]
-            
-            timestamps = []
-            for pattern in timestamp_patterns:
-                matches = re.findall(pattern, section)
-                for j, (start_str, end_str) in enumerate(matches):
-                    start_str = start_str.replace('.', ',')  # Normalize to comma format
-                    end_str = end_str.replace('.', ',')
-                    
-                    start_sec = parse_srt_timestamp(start_str)
-                    end_sec = parse_srt_timestamp(end_str)
-                    duration = end_sec - start_sec
-                    
-                    if duration > 1:  # At least 1 second
-                        timestamps.append({
-                            "segment_num": j + 1,
-                            "start_str": start_str,
-                            "end_str": end_str,
-                            "start_sec": start_sec,
-                            "end_sec": end_sec,
-                            "duration": duration,
-                            "text": f"Segment {j+1} text",
-                            "label": f"Segment {j+1}",
-                            "purpose": "Content"
-                        })
-            
-            if timestamps:
-                st.info(f"📍 Found {len(timestamps)} timestamps for '{title}'")
                 
-                clips.append({
-                    "title": title,
-                    "type": "Franken-Clip",
-                    "theme_category": theme_category,
-                    "num_segments": len(timestamps),
-                    "coherence_validation": "Relaxed parsing - validation bypassed",
-                    "viral_strategy": "Generated from relaxed parsing",
-                    "script": f"Script for {title}",
-                    "timestamps": timestamps,
-                    "validation_passed": True,
-                    "validation_reason": "Relaxed validation - timestamps found"
-                })
-                st.success(f"✅ Added '{title}' via relaxed parsing")
-            else:
-                st.warning(f"⚠️ No valid timestamps found for '{title}'")
-                
-        except Exception as e:
-            st.warning(f"❌ Error in relaxed parsing for section {i}: {e}")
-    
-    return clips
-                    
         except Exception as e:
             st.warning(f"Could not parse Franken-Clip section {i}: {e}")
     
     return clips
 
 def download_drive_file(drive_url: str, download_path: str) -> str:
-    """Downloads a Google Drive file and verifies its integrity - EXACT COPY."""
+    """Downloads a Google Drive file and verifies its integrity."""
     try:
         output_path = os.path.join(download_path, 'downloaded_video.mp4')
         gdown.download(drive_url, output_path, quiet=False, fuzzy=True)
@@ -510,7 +319,7 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
             subclips = []
             valid_segments = []
             
-            # Process each timestamp segment with enhanced details
+            # Process each timestamp segment
             for j, ts in enumerate(clip_data["timestamps"]):
                 start_time, end_time = ts['start_sec'], ts['end_sec']
                 segment_duration = end_time - start_time
@@ -534,9 +343,8 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 st.error(f"❌ No valid segments for Franken-Clip '{clip_data['title']}'. Skipping.")
                 continue
             
-            if len(subclips) < 4:
-                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Enhanced Franken-Clips require exactly 4 segments (HOOK→CONTEXT→BUILD→PAYOFF).")
-                continue
+            if len(subclips) < 3:
+                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Franken-Clips work better with 3+ segments.")
 
             # Calculate total duration
             total_duration = sum(seg["duration"] for seg in valid_segments)
@@ -566,11 +374,10 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 "theme_category": clip_data.get('theme_category', 'General'),
                 "num_segments": len(valid_segments),
                 "total_duration": total_duration,
-                "coherence_check": clip_data.get('coherence_check', 'Not checked'),
                 "viral_strategy": clip_data.get('viral_strategy', 'No strategy provided'),
                 "script": clip_data['script'],
-                "timestamps": clip_data['timestamps'],  # Original timestamps
-                "valid_segments": valid_segments  # Processed segments with details
+                "timestamps": clip_data['timestamps'],
+                "valid_segments": valid_segments
             }
             st.success(f"✅ Generated Franken-Clip: {clip_data['title']}")
 
@@ -623,23 +430,25 @@ def main():
         
         st.markdown("---")
         st.subheader("📋 Franken-Clip Requirements")
-        st.info("• Minimum 3 segments per clip\n• Each segment 3-15 seconds\n• Total duration 30-60 seconds\n• Segments from different video parts")
+        st.info("• 3-4 segments per clip\n• Each segment 5-20 seconds\n• Total duration 25-50 seconds\n• Segments from different video parts")
     
     # Main action button
     if st.button("🚀 Generate Franken-Clips", type="primary", use_container_width=True):
-        st.session_state.results = None # Clear previous results
+        st.session_state.results = None
         if not video_url or not uploaded_transcript:
             st.error("❌ Please provide both a video URL and a transcript file.")
             return
 
         with st.spinner("📖 Reading transcript..."):
             transcript_content = read_transcript_file(uploaded_transcript)
-            if not transcript_content: return
+            if not transcript_content: 
+                return
         st.success("✅ Transcript loaded.")
 
         with st.spinner("🧠 Analyzing transcript for Franken-Clip opportunities..."):
             ai_response = analyze_transcript_with_llm(transcript_content, clips_count)
-            if not ai_response: return
+            if not ai_response: 
+                return
         st.success("✅ Franken-Clip analysis complete.")
 
         with st.spinner("📝 Parsing Franken-Clip recommendations..."):
@@ -650,17 +459,11 @@ def main():
                 # Debug: Show raw AI response
                 with st.expander("🔍 Debug: Raw AI Response"):
                     st.text_area("AI Response", ai_response, height=400)
-                
-                # Try relaxed parsing as fallback
-                st.info("🔄 Attempting relaxed parsing...")
-                clips_data = parse_ai_output_relaxed(ai_response)
-                
-                if not clips_data:
-                    return
+                return
             
         st.success(f"✅ Parsed {len(clips_data)} Franken-Clip recommendations.")
         
-        # Show analysis results and proceed directly to processing
+        # Show analysis results and proceed directly to generation
         st.markdown("---")
         st.header("🎯 Franken-Clip Analysis Results")
         for i, clip in enumerate(clips_data, 1):
@@ -669,16 +472,15 @@ def main():
                 st.markdown(f"**Segments:** {clip['num_segments']} parts")
                 st.markdown("**Timestamp Segments:**")
                 for ts in clip['timestamps']:
-                    duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
+                    duration = ts.get('duration', 0)
                     label = ts.get('label', f"Segment {ts.get('segment_num', 'X')}")
                     st.markdown(f"  • `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s) - *{label}*")
-                st.markdown(f"**Strategy:** {clip.get('viral_strategy', clip.get('rationale', 'No strategy provided'))}")
+                st.markdown(f"**Strategy:** {clip.get('viral_strategy', 'No strategy provided')}")
         
-        # Proceed directly to generation without asking permission
+        # Proceed directly to generation
         st.markdown("---")
         st.header("🎬 Generating Franken-Clips...")
         
-        # --- Process the Franken-Clips ---
         st.session_state.results = {"type": "generator", "data": []}
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -692,7 +494,7 @@ def main():
                 for f in os.listdir(persistent_dir):
                     os.remove(os.path.join(persistent_dir, f))
                 
-                # --- Progressive Franken-Clip Generation ---
+                # Progressive Franken-Clip Generation
                 final_clips = []
                 clip_generator = generate_clips_progressively(video_path, clips_data, temp_dir)
                 for clip in clip_generator:
@@ -740,13 +542,13 @@ def main():
                     # Complete timestamp listing with labels
                     with st.expander("⏰ All Timestamp Segments Used"):
                         for ts in clip['timestamps']:
-                            duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
+                            duration = ts.get('duration', 0)
                             label = ts.get('label', f"Segment {ts.get('segment_num', 'X')}")
                             st.markdown(f"**{label}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
                     
                     st.markdown("---")
 
-                st.session_state.results["data"] = final_clips # Save final list
+                st.session_state.results["data"] = final_clips
                 st.success(f"🎉 All {len(final_clips)} Franken-Clips generated successfully!")
 
             except Exception as e:
@@ -798,7 +600,7 @@ def main():
                 col1, col2 = st.columns(2)
                 with col1:
                     with st.expander("🎯 Viral Strategy"):
-                        st.info(clip.get('viral_strategy', clip.get('rationale', 'No strategy provided')))
+                        st.info(clip.get('viral_strategy', 'No strategy provided'))
                 with col2:
                     with st.expander("📜 Full Script"):
                         st.text_area("", clip['script'], height=100, key=f"script_replay_{clip['path']}")
@@ -806,7 +608,7 @@ def main():
                 # Complete timestamp listing with labels
                 with st.expander("⏰ All Timestamp Segments Used"):
                     for ts in clip['timestamps']:
-                        duration = parse_srt_timestamp(ts['end_str']) - parse_srt_timestamp(ts['start_str'])
+                        duration = ts.get('duration', 0)
                         label = ts.get('label', f"Segment {ts.get('segment_num', 'X')}")
                         st.markdown(f"**{label}:** `{ts['start_str']} → {ts['end_str']}` ({duration:.1f}s)")
                 
