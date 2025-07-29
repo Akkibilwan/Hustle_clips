@@ -1,4 +1,4 @@
-# app.py - MoviePy ClipStitcher (SRT-based, Hardened)
+# app.py - MoviePy ClipStitcher (SRT-based, Fixed)
 import os
 import json
 import tempfile
@@ -64,23 +64,26 @@ def srt_time_to_seconds(time_str: str) -> float:
     try:
         time_parts = time_str.split(',')
         h, m, s = time_parts[0].split(':')
-        ms = time_parts[1]
+        ms = time_parts[1] if len(time_parts) > 1 else '0'
         return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
-    except Exception:
-        st.warning(f"Could not parse SRT time: {time_str}")
+    except Exception as e:
+        st.warning(f"Could not parse SRT time: {time_str} - {e}")
         return 0
 
-def parse_srt(srt_content: str) -> (list, str):
+def parse_srt(srt_content: str) -> tuple:
     """Parses SRT file content."""
-    srt_pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)\n\n', re.S)
+    # Fixed regex pattern with proper escaping
+    srt_pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\n*$)', re.DOTALL)
     matches = srt_pattern.findall(srt_content)
     segments = []
     simplified_transcript = []
+    
     for match in matches:
         index, start, end, text = match
         text = text.strip().replace('\n', ' ')
         segments.append({"index": int(index), "start": start, "end": end, "text": text})
         simplified_transcript.append(f"[{index}] | {start} --> {end} | {text}")
+    
     return segments, "\n".join(simplified_transcript)
 
 def analyze_srt_transcript(transcript_text: str, client: OpenAI) -> str:
@@ -102,16 +105,18 @@ def analyze_srt_transcript(transcript_text: str, client: OpenAI) -> str:
         st.error(f"AI analysis error: {str(e)}")
         raise
 
-def parse_ai_response(text: str) -> (list, str, str):
+def parse_ai_response(text: str) -> tuple:
     """Parse JSON text from AI."""
     try:
         data = json.loads(text)
         segments = data.get("segments", [])
         reason = data.get("reason", "No reason provided.")
         title = data.get("title", "Untitled Clip")
+        
         if not segments:
             st.warning("AI response did not contain any valid segments to process.")
             return [], reason, title
+        
         valid_segments = [seg for seg in segments if all(key in seg for key in ["start", "end", "text"])]
         return valid_segments, reason, title
     except json.JSONDecodeError as e:
@@ -128,6 +133,7 @@ def generate_stitched_clip(video_path: str, segments: list, make_vertical: bool,
     subclips = []
     video = None
     final_clip = None
+    
     try:
         status_text.text("Loading source video into memory...")
         video = VideoFileClip(video_path)
@@ -138,11 +144,14 @@ def generate_stitched_clip(video_path: str, segments: list, make_vertical: bool,
             status_text.text(f"Processing segment {i}/{len(segments)}...")
             start_time = srt_time_to_seconds(seg.get("start"))
             end_time = srt_time_to_seconds(seg.get("end"))
+            
             if start_time >= end_time or start_time > total_duration:
                 st.warning(f"Skipping segment {i}: Invalid time range.")
                 continue
+                
             end_time = min(end_time, total_duration)
-            subclips.append(video.subclip(start_time, end_time))
+            subclip = video.subclip(start_time, end_time)
+            subclips.append(subclip)
 
         if not subclips:
             st.error("No valid subclips could be created. Aborting.")
@@ -153,50 +162,74 @@ def generate_stitched_clip(video_path: str, segments: list, make_vertical: bool,
 
         if make_vertical:
             status_text.text("Converting to vertical 9:16 format...")
-            (w, h) = final_clip.size
+            w, h = final_clip.size
             target_aspect = 9.0 / 16.0
             clip_aspect = float(w) / h
 
-            if clip_aspect > target_aspect: # Wider than target
+            if clip_aspect > target_aspect:  # Wider than target
                 new_width = int(h * target_aspect)
                 final_clip = crop(final_clip, width=new_width, x_center=w/2)
-            else: # Taller than target
+            else:  # Taller than target
                 new_height = int(w / target_aspect)
                 final_clip = crop(final_clip, height=new_height, y_center=h/2)
             
             final_clip = resize(final_clip, height=1920)
 
+        # Create temporary file with proper cleanup
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4", prefix="stitched_clip_")
+        temp_file.close()  # Close the file handle so moviepy can write to it
+        
         status_text.text(f"Writing final video file... (this can take a moment)")
-        final_clip.write_videofile(temp_file.name, codec="libx264", audio_codec="aac", threads=2, preset='medium')
+        final_clip.write_videofile(
+            temp_file.name, 
+            codec="libx264", 
+            audio_codec="aac", 
+            threads=2, 
+            preset='medium',
+            verbose=False,
+            logger=None
+        )
         
         st.success("✅ Final clip generated successfully!")
         return temp_file.name
+        
     except Exception as e:
         st.error(f"Error during clip generation: {str(e)}")
         traceback.print_exc()
         return None
     finally:
         # CRITICAL: Close all video objects to free up memory
-        if video:
-            video.close()
-        if final_clip:
-            final_clip.close()
-        for sc in subclips:
-            sc.close()
+        try:
+            if video:
+                video.close()
+            if final_clip:
+                final_clip.close()
+            for sc in subclips:
+                sc.close()
+        except Exception as e:
+            st.warning(f"Error cleaning up video objects: {e}")
 
 def download_drive_file(drive_url: str, out_path: str) -> str:
     """Download a Google Drive file."""
     try:
-        file_id_match = re.search(r'/file/d/([^/]+)', drive_url) or re.search(r'id=([^&]+)', drive_url)
+        # Extract file ID from various Google Drive URL formats
+        file_id_match = (
+            re.search(r'/file/d/([a-zA-Z0-9_-]+)', drive_url) or 
+            re.search(r'id=([a-zA-Z0-9_-]+)', drive_url) or
+            re.search(r'open\?id=([a-zA-Z0-9_-]+)', drive_url)
+        )
+        
         if not file_id_match:
             raise ValueError("Could not extract file ID from Google Drive URL.")
+            
         file_id = file_id_match.group(1)
         gdown.download(id=file_id, output=out_path, quiet=False)
+        
         if os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
             return out_path
         else:
             raise Exception("Download failed. The file may be private or link is incorrect.")
+            
     except Exception as e:
         raise Exception(f"Google Drive Download Error: {str(e)}")
 
@@ -221,10 +254,15 @@ def main():
     state = st.session_state.app_state
 
     # Get API key
+    api_key = get_api_key()
+    if not api_key:
+        st.error("❌ OpenAI API key is missing. Please check your Streamlit secrets or environment variables.")
+        st.stop()
+    
     try:
-        client = OpenAI(api_key=get_api_key())
+        client = OpenAI(api_key=api_key)
     except Exception as e:
-        st.error(f"❌ OpenAI API key is missing or invalid. Please check your Streamlit secrets. Error: {e}")
+        st.error(f"❌ Error initializing OpenAI client: {e}")
         st.stop()
 
     # --- Sidebar for Inputs ---
@@ -238,6 +276,7 @@ def main():
         with st.spinner("Downloading video from Google Drive..."):
             try:
                 tmp_video = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                tmp_video.close()  # Close file handle
                 state["video_path"] = download_drive_file(drive_url, tmp_video.name)
                 st.success("✅ Video downloaded!")
             except Exception as e:
@@ -245,16 +284,20 @@ def main():
                 st.stop()
     
     if srt_file and not state["srt_content"]:
-        state["srt_content"] = srt_file.getvalue().decode("utf-8")
-        st.success("✅ SRT file loaded.")
+        try:
+            state["srt_content"] = srt_file.getvalue().decode("utf-8")
+            st.success("✅ SRT file loaded.")
+        except Exception as e:
+            st.error(f"❌ Error reading SRT file: {e}")
 
     # --- Main Screen Logic ---
     if not (state["video_path"] and state["srt_content"]):
         st.info("👋 Welcome! Please provide a Google Drive link and an SRT file in the sidebar to begin.")
         st.stop()
 
-    if state["video_path"]:
+    if state["video_path"] and os.path.isfile(state["video_path"]):
         st.video(state["video_path"])
+    
     if state["srt_content"]:
         with st.expander("View Full Transcript"):
             st.text_area("SRT Content", state["srt_content"], height=200, key="srt_display")
@@ -265,15 +308,21 @@ def main():
         if state["final_clip_path"] and os.path.isfile(state["final_clip_path"]):
             st.subheader(f"🎬 {state['clip_title']}")
             st.video(state["final_clip_path"])
+            
             with open(state["final_clip_path"], "rb") as file:
                 st.download_button(
-                    label="⬇️ Download Your Clip", data=file,
+                    label="⬇️ Download Your Clip", 
+                    data=file,
                     file_name=f"{state['clip_title'].replace(' ', '_').lower()}.mp4",
-                    mime="video/mp4", use_container_width=True, type="primary"
+                    mime="video/mp4", 
+                    use_container_width=True, 
+                    type="primary"
                 )
+            
             st.subheader("💡 AI Analysis & Composition")
             st.info(f"**Reasoning:** {state['clip_reason']}")
             st.warning("This clip was created by stitching the following segments:")
+            
             for i, segment in enumerate(state['clip_recipe'], 1):
                 st.markdown(f"**Part {i}:** `{segment['start']} --> {segment['end']}`")
                 st.text(f"\"{segment['text']}\"")
@@ -282,21 +331,33 @@ def main():
     else:
         if st.button("🚀 Analyze & Create Clip", type="primary", use_container_width=True):
             status_text = st.empty()
+            
             with st.spinner("Processing... This may take several minutes."):
                 try:
                     status_text.text("Parsing SRT file...")
                     _, srt_for_ai = parse_srt(state["srt_content"])
+                    
+                    if not srt_for_ai.strip():
+                        st.error("❌ Could not parse SRT file. Please check the format.")
+                        st.stop()
                     
                     status_text.text("🤖 Asking AI to find the best moments...")
                     ai_response_json = analyze_srt_transcript(srt_for_ai, client)
                     
                     status_text.text("✅ AI analysis complete. Parsing response...")
                     segments_to_stitch, reason, title = parse_ai_response(ai_response_json)
+                    
                     if not segments_to_stitch:
                         st.error("AI did not return valid segments to stitch. Please try again.")
                         st.stop()
 
-                    final_clip_path = generate_stitched_clip(state["video_path"], segments_to_stitch, make_vertical, status_text)
+                    final_clip_path = generate_stitched_clip(
+                        state["video_path"], 
+                        segments_to_stitch, 
+                        make_vertical, 
+                        status_text
+                    )
+                    
                     if final_clip_path:
                         state["final_clip_path"] = final_clip_path
                         state["clip_recipe"] = segments_to_stitch
@@ -306,8 +367,10 @@ def main():
                         st.rerun()
                     else:
                         st.error("❌ Clip generation failed. Check the logs above for details.")
+                        
                 except Exception as e:
                     st.error(f"An error occurred during the process: {e}")
+                    traceback.print_exc()
 
     # --- Reset Button ---
     st.sidebar.markdown("---")
@@ -315,12 +378,19 @@ def main():
         # Clean up temp files before clearing state
         for key, value in state.items():
             if '_path' in key and value and isinstance(value, str) and os.path.isfile(value):
-                try: os.unlink(value)
-                except: pass
+                try: 
+                    os.unlink(value)
+                except: 
+                    pass
+        
         # Reset state
         st.session_state.app_state = {
-            "video_path": None, "srt_content": None, "final_clip_path": None,
-            "clip_recipe": None, "clip_reason": None, "clip_title": None,
+            "video_path": None, 
+            "srt_content": None, 
+            "final_clip_path": None,
+            "clip_recipe": None, 
+            "clip_reason": None, 
+            "clip_title": None,
             "processing_complete": False
         }
         st.rerun()
