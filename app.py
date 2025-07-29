@@ -264,7 +264,7 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 continue
             
             if len(subclips) < 4:
-                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Enhanced Franken-Clips work best with 4+ segments."
+                st.warning(f"⚠️ Only {len(subclips)} valid segments found. Enhanced Franken-Clips work best with 4+ segments.")
 
             # Calculate total duration
             total_duration = sum(seg["duration"] for seg in valid_segments)
