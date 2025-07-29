@@ -27,7 +27,7 @@ Create FRANKEN-CLIPS by stitching together NON-CONTIGUOUS segments from differen
 - 💰 **Money & Career** — salaries, struggle, financial risks
 - 💥 **Vulnerability** — fear, failure, doubt  
 - 🎯 **Transformations** — loss to clarity, confusion to purpose
-- 🎭 **Industry Secrets** — what people don\'t see behind success
+- 🎭 **Industry Secrets** — what people don't see behind success
 - 💡 **Advice** — wisdom, frameworks
 - 🧨 **Breaking Norms** — challenging stereotypes
 
@@ -82,9 +82,9 @@ def get_openai_api_key() -> str:
 
 def parse_srt_timestamp(timestamp_str: str) -> float:
     """Convert SRT timestamp format to total seconds."""
-    timestamp_str = timestamp_str.strip().replace(\\',\\', \'.\\')
+    timestamp_str = timestamp_str.strip().replace(',', '.')
     try:
-        time_parts = timestamp_str.split(\\':\\')
+        time_parts = timestamp_str.split(':')
         if len(time_parts) == 3:
             h, m, s_ms = time_parts
             return int(h) * 3600 + int(m) * 60 + float(s_ms)
@@ -101,7 +101,7 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
     Takes start time of first line and end time of last line in each group.
     """
     # Parse individual SRT lines
-    pattern = re.compile(r\'(\\d+)\\n(\\d{2}:\\d{2}:\\d{2},\\d{3}) --> (\\d{2}:\\d{2}:\\d{2},\\d{3})\\n(.*?)(?=\\n\\n|\\n*$)\\', re.DOTALL)
+    pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\n*$)', re.DOTALL)
     matches = pattern.findall(srt_content)
     
     if not matches:
@@ -126,21 +126,21 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
         should_end_group = False
         
         # End group if we hit punctuation that indicates sentence end AND the group is already reasonably long
-        if text.endswith((\\'.\\', \'!\\', \'?\\')) and len(current_text) >= 5:
+        if text.endswith(('.', '!', '?')) and len(current_text) >= 5:
             should_end_group = True
         
         # End group if current group is getting long (increased from 15 to 30 individual lines)
         if len(current_group) >= 30:
             should_end_group = True
             
-        # End group if there\'s a pause in the next timestamp (gap > 1.5 seconds - increased from 1.0)
+        # End group if there's a pause in the next timestamp (gap > 1.5 seconds - increased from 1.0)
         if i < len(matches) - 1:
             current_end_sec = parse_srt_timestamp(end)
             next_start_sec = parse_srt_timestamp(matches[i+1][1])
             if next_start_sec - current_end_sec > 1.5:
                 should_end_group = True
         
-        # End group if we\'re at the last item
+        # End group if we're at the last item
         if i == len(matches) - 1:
             should_end_group = True
             
@@ -148,7 +148,7 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
         if should_end_group and current_group:
             first_start = current_group[0][1]
             last_end = current_group[-1][2]
-            merged_text = \' \'.join(current_text)
+            merged_text = ' '.join(current_text)
             
             # Only include if the merged text is substantial (increased from 3+ seconds to 5+ seconds and 10+ words)
             duration = parse_srt_timestamp(last_end) - parse_srt_timestamp(first_start)
@@ -156,12 +156,12 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
             
             if duration >= 5.0 and word_count >= 10:
                 merged_segments.append({
-                    \'index\': group_counter,
-                    \'start\': first_start,
-                    \'end\': last_end,
-                    \'text\': merged_text,
-                    \'duration\': duration,
-                    \'word_count\': word_count
+                    'index': group_counter,
+                    'start': first_start,
+                    'end': last_end,
+                    'text': merged_text,
+                    'duration': duration,
+                    'word_count': word_count
                 })
                 group_counter += 1
             
@@ -172,7 +172,7 @@ def merge_consecutive_srt_lines(srt_content: str) -> str:
     # Convert back to SRT format
     merged_srt = ""
     for seg in merged_segments:
-        merged_srt += f"{seg[\'index\']}\\n{seg[\'start\']} --> {seg[\'end\']}\\n{seg[\'text\]}\\n\\n"
+        merged_srt += f"{seg['index']}\n{seg['start']} --> {seg['end']}\n{seg['text']}\n\n"
     
     st.info(f"📝 Merged {len(matches)} individual lines into {len(merged_segments)} coherent segments")
     return merged_srt
@@ -181,9 +181,9 @@ def read_transcript_file(uploaded_file) -> str:
     try:
         content = uploaded_file.read().decode("utf-8")
         
-        # Check if it\'s word-level SRT (many short segments)
-        lines = content.strip().split(\'\\n\')
-        srt_blocks = content.split(\'\\n\\n\')
+        # Check if it's word-level SRT (many short segments)
+        lines = content.strip().split('\n')
+        srt_blocks = content.split('\n\n')
         
         if len(srt_blocks) > 50:  # Likely word-level SRT
             st.info("🔍 Detected word-level SRT. Merging consecutive lines into coherent segments...")
@@ -197,7 +197,7 @@ def read_transcript_file(uploaded_file) -> str:
         return ""
 
 def analyze_transcript_with_llm(transcript: str, count: int):
-    user_content = f"{transcript}\\n\\nPlease generate {count} unique Franken-Clips following the exact format specified."
+    user_content = f"{transcript}\n\nPlease generate {count} unique Franken-Clips following the exact format specified."
     
     api_key = get_openai_api_key()
     if not api_key:
@@ -217,34 +217,34 @@ def analyze_transcript_with_llm(transcript: str, count: int):
 
 def parse_ai_output(text: str) -> list:
     clips = []
-    sections = re.split(r\'\\*\\*Short Title:\\*\\*\\', text)
+    sections = re.split(r'\*\*Short Title:\*\*', text)
     
     for i, section in enumerate(sections[1:], 1):
         try:
-            title_match = re.search(r\'^(.*?)(?:\\n|\\*\\*)\\', section, re.MULTILINE)
+            title_match = re.search(r'^(.*?)(?:\n|\*\*)', section, re.MULTILINE)
             title = title_match.group(1).strip() if title_match else f"Untitled Franken-Clip {i}"
             
             # Extract theme category
-            theme_match = re.search(r\'\\*\\*Theme Category:\\*\\*\\s*(.*?)(?:\\n|\\*\\*)\\', section)
+            theme_match = re.search(r'\*\*Theme Category:\*\*\s*(.*?)(?:\n|\*\*)', section)
             theme_category = theme_match.group(1).strip() if theme_match else "General"
             
             # Extract viral strategy
-            strategy_match = re.search(r\'\\*\\*Viral Strategy:\\*\\*([\s\S]*?)(?:\\n\\*\\*|$)\\', section, re.DOTALL)
+            strategy_match = re.search(r'\*\*Viral Strategy:\*\*([\s\S]*?)(?:\n\*\*|$)', section, re.DOTALL)
             viral_strategy = strategy_match.group(1).strip() if strategy_match else "No strategy provided."
 
             # Extract selected segments
-            segments_text_match = re.search(r\'\\*\\*Selected Segments:\\*\\*([\s\S]*?)(?=\\*\\*Coherence Validation:\\*\\*)\\', section, re.DOTALL)
+            segments_text_match = re.search(r'\*\*Selected Segments:\*\*([\s\S]*?)(?=\*\*Coherence Validation:\*\*)', section, re.DOTALL)
             timestamps = []
             
             if segments_text_match:
                 segments_text = segments_text_match.group(1)
-                segment_lines = segments_text.strip().split(\'\\n\')
+                segment_lines = segments_text.strip().split('\n')
                 
                 for line in segment_lines:
                     line = line.strip()
-                    if line.startswith(\'SEGMENT\'):
+                    if line.startswith('SEGMENT'):
                         # Parse segment line
-                        segment_match = re.search(r\'SEGMENT\\s+(\\d+):\\s*(\\d{2}:\\d{2}:\\d{2},\\d{3})\\s*-->\\s*(\\d{2}:\\d{2}:\\d{2},\\d{3})\\s*-\\s*(.*?)\\s*\\[(.*?)\\]\\', line)
+                        segment_match = re.search(r'SEGMENT\s+(\d+):\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*-\s*(.*?)\s*\[(.*?)\]', line)
                         if segment_match:
                             segment_num, start_str, end_str, text, purpose = segment_match.groups()
                             start_sec = parse_srt_timestamp(start_str)
@@ -270,12 +270,12 @@ def parse_ai_output(text: str) -> list:
                     "theme_category": theme_category,
                     "num_segments": len(timestamps),
                     "viral_strategy": viral_strategy,
-                    "script": \' \'.join([t.get(\'text\', \'\') for t in timestamps]),
+                    "script": ' '.join([t.get('text', '') for t in timestamps]),
                     "timestamps": timestamps
                 })
-                st.success(f"✅ Parsed \'{title}\' with {len(timestamps)} segments")
+                st.success(f"✅ Parsed '{title}' with {len(timestamps)} segments")
             else:
-                st.warning(f"⚠️ No valid segments found for \'{title}\'")
+                st.warning(f"⚠️ No valid segments found for '{title}'")
                 
         except Exception as e:
             st.warning(f"Could not parse Franken-Clip section {i}: {e}")
@@ -285,7 +285,7 @@ def parse_ai_output(text: str) -> list:
 def download_drive_file(drive_url: str, download_path: str) -> str:
     """Downloads a Google Drive file and verifies its integrity."""
     try:
-        output_path = os.path.join(download_path, \'downloaded_video.mp4\')
+        output_path = os.path.join(download_path, 'downloaded_video.mp4')
         gdown.download(drive_url, output_path, quiet=False, fuzzy=True)
 
         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
@@ -312,8 +312,8 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
     video_duration = source_video.duration
     
     for i, clip_data in enumerate(clips_data):
-        st.info(f"Processing Franken-Clip {i+1}/{len(clips_data)}: \'{clip_data[\'title\]}\'")
-        st.info(f"📊 Stitching {clip_data[\'num_segments\]} segments together...")
+        st.info(f"Processing Franken-Clip {i+1}/{len(clips_data)}: '{clip_data['title']}'")
+        st.info(f"📊 Stitching {clip_data['num_segments']} segments together...")
         
         try:
             subclips = []
@@ -321,26 +321,26 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
             
             # Process each timestamp segment
             for j, ts in enumerate(clip_data["timestamps"]):
-                start_time, end_time = ts[\'start_sec\'], ts[\'end_sec\']
+                start_time, end_time = ts['start_sec'], ts['end_sec']
                 segment_duration = end_time - start_time
-                segment_label = ts.get(\'label\', f"Segment {ts.get(\'segment_num\', j+1)}")
+                segment_label = ts.get('label', f"Segment {ts.get('segment_num', j+1)}")
                 
                 if start_time < video_duration and end_time <= video_duration:
                     subclip = source_video.subclip(start_time, end_time)
                     subclips.append(subclip)
                     valid_segments.append({
-                        "segment_num": ts.get(\'segment_num\', j + 1),
-                        "start": ts[\'start_str\'],
-                        "end": ts[\'end_str\'],
+                        "segment_num": ts.get('segment_num', j + 1),
+                        "start": ts['start_str'],
+                        "end": ts['end_str'],
                         "duration": segment_duration,
                         "label": segment_label
                     })
-                    st.info(f"  ✅ {segment_label}: {ts[\'start_str\']} → {ts[\'end_str\]} ({segment_duration:.1f}s)")
+                    st.info(f"  ✅ {segment_label}: {ts['start_str']} → {ts['end_str']} ({segment_duration:.1f}s)")
                 else:
-                    st.warning(f"  ⚠️ {segment_label}: {ts[\'start_str\']} → {ts[\'end_str\]} is out of bounds. Skipping.")
+                    st.warning(f"  ⚠️ {segment_label}: {ts['start_str']} → {ts['end_str']} is out of bounds. Skipping.")
             
             if not subclips:
-                st.error(f"❌ No valid segments for Franken-Clip \'{clip_data[\'title\]}\'. Skipping.")
+                st.error(f"❌ No valid segments for Franken-Clip '{clip_data['title']}'. Skipping.")
                 continue
             
             if len(subclips) < 3:
@@ -353,7 +353,7 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
             # Concatenate all segments in order
             final_clip = concatenate_videoclips(subclips)
             
-            safe_title = re.sub(r\'[^\\w\\s-]\', \'\', clip_data[\'title\]).strip().replace(\' \', \'_\')
+            safe_title = re.sub(r'[^\w\s-]', '', clip_data['title']).strip().replace(' ', '_')
             output_filepath = os.path.join(output_dir, f"franken_clip_{i+1}_{safe_title[:20]}.mp4")
             
             st.info("🎥 Rendering Franken-Clip...")
@@ -361,7 +361,7 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
                 output_filepath, 
                 codec="libx264", 
                 audio_codec="aac", 
-                temp_audiofile=f\'temp-audio-franken_{i}.m4a\', 
+                temp_audiofile=f'temp-audio-franken_{i}.m4a', 
                 remove_temp=True, 
                 logger=None
             )
@@ -369,24 +369,24 @@ def generate_clips_progressively(video_path: str, clips_data: list, output_dir: 
             # YIELD the completed Franken-Clip with all segment details
             yield {
                 "path": output_filepath,
-                "title": clip_data[\'title\'],
+                "title": clip_data['title'],
                 "type": "Franken-Clip",
-                "theme_category": clip_data.get(\'theme_category\', \'General\'),
+                "theme_category": clip_data.get('theme_category', 'General'),
                 "num_segments": len(valid_segments),
                 "total_duration": total_duration,
-                "viral_strategy": clip_data.get(\'viral_strategy\', \'No strategy provided\'),
-                "script": clip_data[\'script\'],
-                "timestamps": clip_data[\'timestamps\'],
+                "viral_strategy": clip_data.get('viral_strategy', 'No strategy provided'),
+                "script": clip_data['script'],
+                "timestamps": clip_data['timestamps'],
                 "valid_segments": valid_segments
             }
-            st.success(f"✅ Generated Franken-Clip: {clip_data[\'title\]}")
+            st.success(f"✅ Generated Franken-Clip: {clip_data['title']}")
 
         except Exception as e:
-            st.error(f"❌ Failed to generate Franken-Clip \'{clip_data[\'title\]}\': {e}")
+            st.error(f"❌ Failed to generate Franken-Clip '{clip_data['title']}': {e}")
         finally:
-            if \'final_clip\' in locals(): 
+            if 'final_clip' in locals(): 
                 final_clip.close()
-            if \'subclips\' in locals():
+            if 'subclips' in locals():
                 for sc in subclips: 
                     sc.close()
 
@@ -455,21 +455,21 @@ def main():
                                     if generated_clips_info:
                                         st.subheader("Generated Clips:")
                                         for clip in generated_clips_info:
-                                            st.markdown(f"### {clip[\'title\]}")
-                                            st.write(f"**Theme:** {clip[\'theme_category\]}")
-                                            st.write(f"**Total Duration:** {clip[\'total_duration\]:.1f} seconds")
-                                            st.write(f"**Segments:** {clip[\'num_segments\]}")
-                                            st.write(f"**Viral Strategy:** {clip[\'viral_strategy\]}")
+                                            st.markdown(f"### {clip['title']}")
+                                            st.write(f"**Theme:** {clip['theme_category']}")
+                                            st.write(f"**Total Duration:** {clip['total_duration']:.1f} seconds")
+                                            st.write(f"**Segments:** {clip['num_segments']}")
+                                            st.write(f"**Viral Strategy:** {clip['viral_strategy']}")
                                             st.write("**Script:**")
-                                            st.info(clip[\'script\])
+                                            st.info(clip['script'])
                                             
                                             st.download_button(
-                                                label=f"Download {clip[\'title\]}.mp4",
-                                                data=open(clip[\'path\'], "rb").read(),
-                                                file_name=os.path.basename(clip[\'path\']),
+                                                label=f"Download {clip['title']}.mp4",
+                                                data=open(clip['path'], "rb").read(),
+                                                file_name=os.path.basename(clip['path']),
                                                 mime="video/mp4"
                                             )
-                                            st.video(clip[\'path\'])
+                                            st.video(clip['path'])
                                     else:
                                         st.warning("No Franken-Clips were generated.")
                                         
